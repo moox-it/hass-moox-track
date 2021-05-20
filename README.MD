@@ -1,3 +1,5 @@
+[🇮🇹 Italiano](README_it.md)
+
 # MOOX-Track Custom Component for HASS
 
 MOOX-Track Custom Component for HASS (hass-moox-track) is a custom component that connects your MOOX Track devices to Home Assistant as "Device Trackers"
