@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up MOOX Track",
-        "description": "Are you sure you want to set up MOOX Track?"
+        "description": "Are you sure to set up MOOX Track?"
       }
     },
     "abort": {
