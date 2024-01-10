@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
-from datetime import datetime, timedelta
+from datetime import timedelta
 import logging
 
 from pytraccar import (
@@ -12,6 +11,7 @@ from pytraccar import (
     GeofenceModel,
     PositionModel,
     TraccarAuthenticationException,
+    TraccarConnectionException,
     TraccarException,
 )
 from stringcase import camelcase
@@ -20,9 +20,10 @@ import voluptuous as vol
 from homeassistant.components.device_tracker import (
     CONF_SCAN_INTERVAL,
     PLATFORM_SCHEMA as PARENT_PLATFORM_SCHEMA,
-    SOURCE_TYPE_GPS,
+    AsyncSeeCallback,
+    SourceType,
+    TrackerEntity,
 )
-from homeassistant.components.device_tracker.config_entry import TrackerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_EVENT,
@@ -35,15 +36,15 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.util import slugify
+from homeassistant.util import dt as dt_util, slugify
 
 from . import DOMAIN, TRACKER_UPDATE
 from .const import (
@@ -107,6 +108,16 @@ EVENTS = [
     EVENT_ALL_EVENTS,
 ]
 
+# MOOX Funzione per aggiungere condizioni di monitoraggio predefinite.
+# Questa funzione garantisce che 'power' e 'ignition' siano inclusi nelle condizioni monitorate,
+# aggiungendoli all'elenco se non sono già presenti.
+def add_default_conditions(conditions):
+    default_conditions = ['power', 'ignition', 'odometer']
+    for condition in default_conditions:
+        if condition not in conditions:
+            conditions.append(condition)
+    return conditions
+
 PLATFORM_SCHEMA = PARENT_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_PASSWORD): cv.string,
@@ -119,8 +130,11 @@ PLATFORM_SCHEMA = PARENT_PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_SKIP_ACCURACY_ON, default=[]): vol.All(
             cv.ensure_list, [cv.string]
         ),
+        # MOOX Opzione di configurazione per le condizioni monitorate.
+        # Modifica: Impostazione di default su un elenco vuoto e aggiunta della funzione per garantire
+        # che 'power' e 'ignition' siano sempre inclusi nelle condizioni monitorate.
         vol.Optional(CONF_MONITORED_CONDITIONS, default=[]): vol.All(
-            cv.ensure_list, [cv.string]
+            cv.ensure_list, [cv.string], add_default_conditions
         ),
         vol.Optional(CONF_EVENT, default=[]): vol.All(
             cv.ensure_list,
@@ -128,6 +142,7 @@ PLATFORM_SCHEMA = PARENT_PLATFORM_SCHEMA.extend(
         ),
     }
 )
+
 
 
 async def async_setup_entry(
@@ -152,7 +167,7 @@ async def async_setup_entry(
     ] = async_dispatcher_connect(hass, TRACKER_UPDATE, _receive_data)
 
     # Restore previously loaded devices
-    dev_reg = device_registry.async_get(hass)
+    dev_reg = dr.async_get(hass)
     dev_ids = {
         identifier[1]
         for device in dev_reg.devices.values()
@@ -174,7 +189,7 @@ async def async_setup_entry(
 async def async_setup_scanner(
     hass: HomeAssistant,
     config: ConfigType,
-    async_see: Callable[..., Awaitable[None]],
+    async_see: AsyncSeeCallback,
     discovery_info: DiscoveryInfoType | None = None,
 ) -> bool:
     """Validate the configuration and return a moox_track scanner."""
@@ -208,7 +223,7 @@ class moox_trackScanner:
         self,
         api: ApiClient,
         hass: HomeAssistant,
-        async_see: Callable[..., Awaitable[None]],
+        async_see: AsyncSeeCallback,
         scan_interval: timedelta,
         max_accuracy: int,
         skip_accuracy_on: bool,
@@ -238,16 +253,25 @@ class moox_trackScanner:
         except TraccarAuthenticationException:
             _LOGGER.error("Authentication for moox_track failed")
             return False
+        except TraccarConnectionException as exception:
+            _LOGGER.error("Connection with moox_track failed - %s", exception)
+            return False
 
         await self._async_update()
-        async_track_time_interval(self._hass, self._async_update, self._scan_interval)
+        async_track_time_interval(
+            self._hass, self._async_update, self._scan_interval, cancel_on_shutdown=True
+        )
         return True
 
     async def _async_update(self, now=None):
         """Update info from moox_track."""
         _LOGGER.debug("Updating device data")
         try:
-            (self._devices, self._positions, self._geofences,) = await asyncio.gather(
+            (
+                self._devices,
+                self._positions,
+                self._geofences,
+            ) = await asyncio.gather(
                 self._api.get_devices(),
                 self._api.get_positions(),
                 self._api.get_geofences(),
@@ -264,7 +288,8 @@ class moox_trackScanner:
         """Import device data from moox_track."""
         for position in self._positions:
             device = next(
-                (dev for dev in self._devices if dev.id == position.device_id), None
+                (dev for dev in self._devices if dev["id"] == position["deviceId"]),
+                None,
             )
 
             if not device:
@@ -272,36 +297,36 @@ class moox_trackScanner:
 
             attr = {
                 ATTR_TRACKER: "moox_track",
-                ATTR_ADDRESS: position.address,
-                ATTR_SPEED: position.speed,
-                ATTR_ALTITUDE: position.altitude,
-                ATTR_MOTION: position.attributes.get("motion", False),
-                ATTR_moox_track_ID: device.id,
+                ATTR_ADDRESS: position["address"],
+                ATTR_SPEED: position["speed"],
+                ATTR_ALTITUDE: position["altitude"],
+                ATTR_MOTION: position["attributes"].get("motion", False),
+                ATTR_moox_track_ID: device["id"],
                 ATTR_GEOFENCE: next(
                     (
-                        geofence.name
+                        geofence["name"]
                         for geofence in self._geofences
-                        if geofence.id in (device.geofence_ids or [])
+                        if geofence["id"] in (position["geofenceIds"] or [])
                     ),
                     None,
                 ),
-                ATTR_CATEGORY: device.category,
-                ATTR_STATUS: device.status,
+                ATTR_CATEGORY: device["category"],
+                ATTR_STATUS: device["status"],
             }
 
             skip_accuracy_filter = False
 
             for custom_attr in self._custom_attributes:
-                if device.attributes.get(custom_attr) is not None:
-                    attr[custom_attr] = position.attributes[custom_attr]
+                if device["attributes"].get(custom_attr) is not None:
+                    attr[custom_attr] = position["attributes"][custom_attr]
                     if custom_attr in self._skip_accuracy_on:
                         skip_accuracy_filter = True
-                if position.attributes.get(custom_attr) is not None:
-                    attr[custom_attr] = position.attributes[custom_attr]
+                if position["attributes"].get(custom_attr) is not None:
+                    attr[custom_attr] = position["attributes"][custom_attr]
                     if custom_attr in self._skip_accuracy_on:
                         skip_accuracy_filter = True
 
-            accuracy = position.accuracy or 0.0
+            accuracy = position["accuracy"] or 0.0
             if (
                 not skip_accuracy_filter
                 and self._max_accuracy > 0
@@ -315,18 +340,19 @@ class moox_trackScanner:
                 continue
 
             await self._async_see(
-                dev_id=slugify(device.name),
-                gps=(position.latitude, position.longitude),
+                dev_id=slugify(device["name"]),
+                gps=(position["latitude"], position["longitude"]),
                 gps_accuracy=accuracy,
-                battery=position.attributes.get("batteryLevel", -1),
+                battery=position["attributes"].get("batteryLevel", -1),
                 attributes=attr,
             )
 
     async def import_events(self):
         """Import events from moox_track."""
-        start_intervel = datetime.utcnow()
+        # get_reports_events requires naive UTC datetimes as of 1.0.0
+        start_intervel = dt_util.utcnow().replace(tzinfo=None)
         events = await self._api.get_reports_events(
-            devices=[device.id for device in self._devices],
+            devices=[device["id"] for device in self._devices],
             start_time=start_intervel,
             end_time=start_intervel - self._scan_interval,
             event_types=self._event_types.keys(),
@@ -334,20 +360,20 @@ class moox_trackScanner:
         if events is not None:
             for event in events:
                 self._hass.bus.async_fire(
-                    f"moox_track_{self._event_types.get(event.type)}",
+                    f"moox_track_{self._event_types.get(event['type'])}",
                     {
-                        "device_moox_track_id": event.device_id,
+                        "device_moox_track_id": event["deviceId"],
                         "device_name": next(
                             (
-                                dev.name
+                                dev["name"]
                                 for dev in self._devices
-                                if dev.id == event.device_id
+                                if dev["id"] == event["deviceId"]
                             ),
                             None,
                         ),
-                        "type": event.type,
-                        "serverTime": event.event_time,
-                        "attributes": event.attributes,
+                        "type": event["type"],
+                        "serverTime": event["eventTime"],
+                        "attributes": event["attributes"],
                     },
                 )
 
@@ -355,8 +381,11 @@ class moox_trackScanner:
 class moox_trackEntity(TrackerEntity, RestoreEntity):
     """Represent a tracked device."""
 
+    _attr_has_entity_name = True
+    _attr_name = None
+
     def __init__(self, device, latitude, longitude, battery, accuracy, attributes):
-        """Set up Geofency entity."""
+        """Set up moox_track entity."""
         self._accuracy = accuracy
         self._attributes = attributes
         self._name = device
@@ -392,26 +421,24 @@ class moox_trackEntity(TrackerEntity, RestoreEntity):
         return self._accuracy
 
     @property
-    def name(self):
-        """Return the name of the device."""
-        return self._name
-
-    @property
     def unique_id(self):
         """Return the unique ID."""
         return self._unique_id
 
     @property
-    def device_info(self):
+    def device_info(self) -> DeviceInfo:
         """Return the device info."""
-        return {"name": self._name, "identifiers": {(DOMAIN, self._unique_id)}}
+        return DeviceInfo(
+            name=self._name,
+            identifiers={(DOMAIN, self._unique_id)},
+        )
 
     @property
-    def source_type(self):
+    def source_type(self) -> SourceType:
         """Return the source type, eg gps or router, of the device."""
-        return SOURCE_TYPE_GPS
+        return SourceType.GPS
 
-    async def async_added_to_hass(self):
+    async def async_added_to_hass(self) -> None:
         """Register state update callback."""
         await super().async_added_to_hass()
         self._unsub_dispatcher = async_dispatcher_connect(
@@ -445,7 +472,7 @@ class moox_trackEntity(TrackerEntity, RestoreEntity):
         }
         self._battery = attr.get(ATTR_BATTERY)
 
-    async def async_will_remove_from_hass(self):
+    async def async_will_remove_from_hass(self) -> None:
         """Clean up after entity before removal."""
         await super().async_will_remove_from_hass()
         self._unsub_dispatcher()
@@ -455,7 +482,7 @@ class moox_trackEntity(TrackerEntity, RestoreEntity):
         self, device, latitude, longitude, battery, accuracy, attributes
     ):
         """Mark the device as seen."""
-        if device != self.name:
+        if device != self._name:
             return
 
         self._latitude = latitude

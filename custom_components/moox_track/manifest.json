@@ -1,20 +1,13 @@
 {
   "domain": "moox_track",
   "name": "MOOX Track",
+  "codeowners": ["@moox-it"],
   "config_flow": false,
+  "dependencies": ["webhook"],
   "documentation": "https://moox.it",
-  "requirements": [
-    "pytraccar==1.0.0",
-    "stringcase==1.2.0"
-  ],
-  "dependencies": [
-    "webhook"
-  ],
-  "codeowners": [
-    "@moox-it"
-  ],
   "issue_tracker": "https://github.com/moox-it/hass-moox-track/issues",
   "iot_class": "cloud_polling",
-  "version": "1.4",
-  "loggers": ["pytraccar"]
+  "version": "1.5",
+  "loggers": ["pytraccar"],
+  "requirements": ["pytraccar==2.0.0", "stringcase==1.2.0"]
 }
