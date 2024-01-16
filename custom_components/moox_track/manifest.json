@@ -7,7 +7,7 @@
   "documentation": "https://moox.it",
   "issue_tracker": "https://github.com/moox-it/hass-moox-track/issues",
   "iot_class": "cloud_polling",
-  "version": "1.5",
+  "version": "1.6",
   "loggers": ["pytraccar"],
-  "requirements": ["pytraccar==2.0.0", "stringcase==1.2.0"]
+  "requirements": ["pytraccar==1.0.0", "stringcase==1.2.0"]
 }
