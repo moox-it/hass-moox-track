@@ -288,7 +288,7 @@ class moox_trackScanner:
         """Import device data from moox_track."""
         for position in self._positions:
             device = next(
-                (dev for dev in self._devices if dev.id == position.device_id), None
+                (dev for dev in self._devices if dev.get('id') == position.get('deviceId')), None
             )
 
             if not device:
@@ -296,36 +296,34 @@ class moox_trackScanner:
 
             attr = {
                 ATTR_TRACKER: "moox_track",
-                ATTR_ADDRESS: position.address,
-                ATTR_SPEED: position.speed,
-                ATTR_ALTITUDE: position.altitude,
-                ATTR_MOTION: position.attributes.get("motion", False),
-                ATTR_moox_track_ID: device.id,
+                ATTR_ADDRESS: position.get('address'),
+                ATTR_SPEED: position.get('speed'),
+                ATTR_ALTITUDE: position.get('altitude'),
+                ATTR_MOTION: position.get('attributes', {}).get("motion", False),
+                ATTR_moox_track_ID: device.get('id'),
                 ATTR_GEOFENCE: next(
                     (
-                        geofence.name
+                        geofence.get('name')
                         for geofence in self._geofences
-                        if geofence.id in (device.geofence_ids or [])
+                        if geofence.get('id') in (device.get('geofenceIds') or [])
                     ),
                     None,
                 ),
-                ATTR_CATEGORY: device.category,
-                ATTR_STATUS: device.status,
+                ATTR_CATEGORY: device.get('category'),
+                ATTR_STATUS: device.get('status'),
             }
 
             skip_accuracy_filter = False
 
             for custom_attr in self._custom_attributes:
-                if device.attributes.get(custom_attr) is not None:
-                    attr[custom_attr] = position.attributes[custom_attr]
-                    if custom_attr in self._skip_accuracy_on:
-                        skip_accuracy_filter = True
-                if position.attributes.get(custom_attr) is not None:
-                    attr[custom_attr] = position.attributes[custom_attr]
+                if device.get('attributes', {}).get(custom_attr) is not None:
+                    attr[custom_attr] = position.get('attributes', {}).get(custom_attr)
+                if position.get('attributes', {}).get(custom_attr) is not None:
+                    attr[custom_attr] = position.get('attributes', {}).get(custom_attr)
                     if custom_attr in self._skip_accuracy_on:
                         skip_accuracy_filter = True
 
-            accuracy = position.accuracy or 0.0
+            accuracy = position.get('accuracy', 0.0)
             if (
                 not skip_accuracy_filter
                 and self._max_accuracy > 0
@@ -339,10 +337,10 @@ class moox_trackScanner:
                 continue
 
             await self._async_see(
-                dev_id=slugify(device.name),
-                gps=(position.latitude, position.longitude),
+                dev_id=slugify(device.get('name')),
+                gps=(position.get('latitude'), position.get('longitude')),
                 gps_accuracy=accuracy,
-                battery=position.attributes.get("batteryLevel", -1),
+                battery=position.get('attributes', {}).get("batteryLevel", -1),
                 attributes=attr,
             )
 
