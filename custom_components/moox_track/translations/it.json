@@ -2,16 +2,161 @@
     "config": {
         "abort": {
             "cloud_not_connected": "Non connesso a Home Assistant Cloud.",
-            "single_instance_allowed": "Gi\u00e0 configurato. \u00c8 possibile una sola configurazione.",
-            "webhook_not_internet_accessible": "L'istanza di Home Assistant deve essere accessibile da Internet per ricevere messaggi webhook."
+            "single_instance_allowed": "Gi\u00e0 configurato. \u00c8 possibile una sola configurazione."
         },
         "create_entry": {
-            "default": "Per inviare eventi a Home Assistant, \u00e8 necessario impostare la funzione webhook in MOOX Track.\n\nUsa il seguente URL: `{webhook_url}`.\n\nVedi [la documentazione]({docs_url}) per ulteriori dettagli."
+            "default": "MOOX Track \u00e8 stato configurato correttamente."
         },
         "step": {
             "user": {
                 "description": "Sei sicuro di voler configurare MOOX Track?",
                 "title": "Imposta MOOX Track"
+            }
+        }
+    },
+    "entity": {
+        "binary_sensor": {
+            "motion": {
+                "name": "[05·MOV] Movimento",
+                "state": {
+                    "off": "Fermo",
+                    "on": "In movimento"
+                }
+            },
+            "status": {
+                "name": "[90·DIA] Stato",
+                "state": {
+                    "off": "Offline",
+                    "on": "Online"
+                }
+            },
+            "di1": {
+                "name": "[06·IO] Ingresso digitale 1",
+                "state": {
+                    "off": "Spento",
+                    "on": "Acceso"
+                }
+            },
+            "ignition": {
+                "name": "[06·IO] Accensione",
+                "state": {
+                    "off": "Spento",
+                    "on": "Acceso"
+                }
+            },
+            "out1": {
+                "name": "[06·IO] Uscita 1",
+                "state": {
+                    "off": "Spento",
+                    "on": "Acceso"
+                }
+            }
+        },
+        "sensor": {
+            "accuracy": {
+                "name": "[04·FIX] Precisione"
+            },
+            "altitude": {
+                "name": "[03·GPS] Altitudine"
+            },
+            "course": {
+                "name": "[04·FIX] Rotta"
+            },
+            "event": {
+                "name": "[08·LOG] Evento"
+            },
+            "geofence": {
+                "name": "[02·LOC] Geofence"
+            },
+            "last_gps_fix_accuracy": {
+                "name": "[93·DIA] Precisione ultimo fix GPS"
+            },
+            "last_gps_fix_altitude": {
+                "name": "[92·DIA] Altitudine ultimo fix GPS"
+            },
+            "last_gps_fix_course": {
+                "name": "[93·DIA] Rotta ultimo fix GPS"
+            },
+            "last_gps_fix_device_time": {
+                "name": "[94·DIA] Ora dispositivo ultimo fix GPS"
+            },
+            "last_gps_fix_fix_time": {
+                "name": "[94·DIA] Ora fix ultimo fix GPS"
+            },
+            "last_gps_fix_latitude": {
+                "name": "[92·DIA] Latitudine ultimo fix GPS"
+            },
+            "last_gps_fix_longitude": {
+                "name": "[92·DIA] Longitudine ultimo fix GPS"
+            },
+            "last_gps_fix_server_time": {
+                "name": "[94·DIA] Ora server ultimo fix GPS"
+            },
+            "last_gps_fix_speed": {
+                "name": "[93·DIA] Velocità ultimo fix GPS"
+            },
+            "last_gps_fix_speed_kmh": {
+                "name": "[93·DIA] Velocità ultimo fix GPS (km/h)"
+            },
+            "latitude": {
+                "name": "[03·GPS] Latitudine"
+            },
+            "longitude": {
+                "name": "[03·GPS] Longitudine"
+            },
+            "odometer": {
+                "name": "[08·LOG] Contachilometri"
+            },
+            "power": {
+                "name": "[07·SYS] Tensione"
+            },
+            "rssi": {
+                "name": "[07·SYS] RSSI"
+            },
+            "sat": {
+                "name": "[07·SYS] Satelliti"
+            },
+            "speed": {
+                "name": "[05·MOV] Velocità (kn)"
+            },
+            "speed_kmh": {
+                "name": "[05·MOV] Velocità (km/h)"
+            },
+            "server_time": {
+                "name": "[91·DIA] Ora server"
+            },
+            "device_time": {
+                "name": "[91·DIA] Ora dispositivo"
+            },
+            "fix_time": {
+                "name": "[91·DIA] Ora fix"
+            },
+            "battery_level": {
+                "name": "[90·DIA] Livello Batteria"
+            },
+            "event_raw": {
+                "name": "[90·DIA] Evento Raw"
+            },
+            "alarms": {
+                "name": "[09·ALM] Allarmi"
+            },
+            "warnings": {
+                "name": "[10·WRN] Avvisi"
+            },
+            "rpm": {
+                "name": "[11·OBD] Giri Motore"
+            },
+            "fuel": {
+                "name": "[11·OBD] Livello Carburante"
+            },
+            "dtc_codes": {
+                "name": "[11·OBD] Codici Errore Diagnostici"
+            },
+            "dtc_count": {
+                "name": "[11·OBD] Numero Codici Errore"
+            },
+            "configuration_received": {
+                "name": "[12·CFG] Configurazione Ricevuta"
             }
         }
     }

@@ -1,0 +1,124 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "motion": {
+        "default": "mdi:run",
+        "state": {
+          "off": "mdi:run-fast",
+          "on": "mdi:run"
+        }
+      },
+      "status": {
+        "default": "mdi:access-point-minus",
+        "state": {
+          "off": "mdi:access-point-off",
+          "on": "mdi:access-point"
+        }
+      },
+      "di1": {
+        "default": "mdi:toggle-switch-outline",
+        "state": {
+          "off": "mdi:toggle-switch-off-outline",
+          "on": "mdi:toggle-switch"
+        }
+      },
+      "ignition": {
+        "default": "mdi:car-key",
+        "state": {
+          "off": "mdi:car-key-off",
+          "on": "mdi:car-key"
+        }
+      },
+      "out1": {
+        "default": "mdi:power",
+        "state": {
+          "off": "mdi:power-off",
+          "on": "mdi:power"
+        }
+      }
+    },
+    "sensor": {
+      "battery_level": {
+        "default": "mdi:battery"
+      },
+      "latitude": {
+        "default": "mdi:crosshairs-gps"
+      },
+      "longitude": {
+        "default": "mdi:crosshairs-gps"
+      },
+      "speed": {
+        "default": "mdi:speedometer"
+      },
+      "speed_kmh": {
+        "default": "mdi:speedometer"
+      },
+      "altitude": {
+        "default": "mdi:altimeter"
+      },
+      "course": {
+        "default": "mdi:compass"
+      },
+      "accuracy": {
+        "default": "mdi:crosshairs-gps"
+      },
+      "sat": {
+        "default": "mdi:satellite"
+      },
+      "event": {
+        "default": "mdi:alert-circle"
+      },
+      "rssi": {
+        "default": "mdi:signal"
+      },
+      "power": {
+        "default": "mdi:lightning-bolt"
+      },
+      "odometer": {
+        "default": "mdi:gauge"
+      },
+      "geofence": {
+        "default": "mdi:map-marker"
+      },
+      "last_gps_fix_latitude": {
+        "default": "mdi:crosshairs-gps"
+      },
+      "last_gps_fix_longitude": {
+        "default": "mdi:crosshairs-gps"
+      },
+      "last_gps_fix_altitude": {
+        "default": "mdi:altimeter"
+      },
+      "last_gps_fix_speed": {
+        "default": "mdi:speedometer"
+      },
+      "last_gps_fix_speed_kmh": {
+        "default": "mdi:speedometer"
+      },
+      "last_gps_fix_course": {
+        "default": "mdi:compass"
+      },
+      "last_gps_fix_accuracy": {
+        "default": "mdi:crosshairs-gps"
+      },
+      "last_gps_fix_server_time": {
+        "default": "mdi:clock-outline"
+      },
+      "last_gps_fix_device_time": {
+        "default": "mdi:clock-outline"
+      },
+      "last_gps_fix_fix_time": {
+        "default": "mdi:clock-outline"
+      },
+      "server_time": {
+        "default": "mdi:clock-outline"
+      },
+      "device_time": {
+        "default": "mdi:clock-outline"
+      },
+      "fix_time": {
+        "default": "mdi:clock-outline"
+      }
+    }
+  }
+}

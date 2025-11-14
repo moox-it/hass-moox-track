@@ -1,18 +1,200 @@
 {
   "config": {
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "reauth_successful": "[%key:common::config_flow::abort::reauth_successful%]"
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
     "step": {
+      "reauth_confirm": {
+        "data": {
+          "username": "[%key:common::config_flow::data::username%]",
+          "password": "[%key:common::config_flow::data::password%]"
+        },
+        "description": "The authentication credentials for {host}:{port} need to be updated."
+      },
       "user": {
+        "data": {
+          "username": "[%key:common::config_flow::data::username%]",
+          "password": "[%key:common::config_flow::data::password%]"
+        },
+        "data_description": {
+          "username": "The username (email) of your MOOX Track account",
+          "password": "The password of your MOOX Track account"
+        },
         "title": "Set up MOOX Track",
         "description": "Are you sure you want to set up MOOX Track?"
       }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "motion": {
+        "name": "[05·MOV] Motion",
+        "state": {
+          "off": "[%key:common::state::stopped%]",
+          "on": "Moving"
+        }
+      },
+      "status": {
+        "name": "[90·DIA] Status",
+        "state": {
+          "off": "Offline",
+          "on": "Online"
+        }
+      },
+      "ignition": {
+        "name": "[06·IO] Ignition",
+        "state": {
+          "off": "[%key:common::state::off%]",
+          "on": "[%key:common::state::on%]"
+        }
+      },
+      "out1": {
+        "name": "[06·IO] Output 1",
+        "state": {
+          "off": "[%key:common::state::off%]",
+          "on": "[%key:common::state::on%]"
+        }
+      },
+      "di1": {
+        "name": "[06·IO] Digital input 1",
+        "state": {
+          "off": "[%key:common::state::off%]",
+          "on": "[%key:common::state::on%]"
+        }
+      }
     },
-    "abort": {
-      "cloud_not_connected": "[%key:common::config_flow::abort::cloud_not_connected%]",
-      "single_instance_allowed": "[%key:common::config_flow::abort::single_instance_allowed%]",
-      "webhook_not_internet_accessible": "[%key:common::config_flow::abort::webhook_not_internet_accessible%]"
-    },
-    "create_entry": {
-      "default": "To send events to Home Assistant, you will need to set up the webhook feature in MOOX Track.\n\nUse the following URL: `{webhook_url}`\n\nSee [the documentation]({docs_url}) for further details."
+    "sensor": {
+      "altitude": {
+        "name": "[03·GPS] Altitude"
+      },
+      "latitude": {
+        "name": "[03·GPS] Latitude"
+      },
+      "longitude": {
+        "name": "[03·GPS] Longitude"
+      },
+      "course": {
+        "name": "[04·FIX] Course"
+      },
+      "accuracy": {
+        "name": "[04·FIX] Accuracy"
+      },
+      "sat": {
+        "name": "[07·SYS] Satellites"
+      },
+      "event": {
+        "name": "[08·LOG] Event"
+      },
+      "rssi": {
+        "name": "[07·SYS] RSSI"
+      },
+      "power": {
+        "name": "[07·SYS] Power"
+      },
+      "odometer": {
+        "name": "[08·LOG] Odometer"
+      },
+      "geofence": {
+        "name": "[02·LOC] Geofence"
+      },
+      "last_gps_fix_latitude": {
+        "name": "[92·DIA] Last GPS fix latitude"
+      },
+      "last_gps_fix_longitude": {
+        "name": "[92·DIA] Last GPS fix longitude"
+      },
+      "last_gps_fix_altitude": {
+        "name": "[92·DIA] Last GPS fix altitude"
+      },
+      "last_gps_fix_speed": {
+        "name": "[93·DIA] Last GPS fix speed"
+      },
+      "last_gps_fix_speed_kmh": {
+        "name": "[93·DIA] Last GPS fix speed (km/h)"
+      },
+      "last_gps_fix_course": {
+        "name": "[93·DIA] Last GPS fix course"
+      },
+      "last_gps_fix_accuracy": {
+        "name": "[93·DIA] Last GPS fix accuracy"
+      },
+      "last_gps_fix_server_time": {
+        "name": "[94·DIA] Last GPS fix server time"
+      },
+      "last_gps_fix_device_time": {
+        "name": "[94·DIA] Last GPS fix device time"
+      },
+      "last_gps_fix_fix_time": {
+        "name": "[94·DIA] Last GPS fix fix time"
+      },
+      "speed": {
+        "name": "[05·MOV] Speed (kn)"
+      },
+      "speed_kmh": {
+        "name": "[05·MOV] Speed (km/h)"
+      },
+      "server_time": {
+        "name": "[91·DIA] Server time"
+      },
+      "device_time": {
+        "name": "[91·DIA] Device time"
+      },
+      "fix_time": {
+        "name": "[91·DIA] Fix time"
+      },
+      "battery_level": {
+        "name": "[90·DIA] Battery Level"
+      },
+      "event_raw": {
+        "name": "[90·DIA] Event Raw"
+      },
+      "alarms": {
+        "name": "[09·ALM] Alarms"
+      },
+      "warnings": {
+        "name": "[10·WRN] Warnings"
+      },
+      "rpm": {
+        "name": "[11·OBD] RPM"
+      },
+      "fuel": {
+        "name": "[11·OBD] Fuel Level"
+      },
+      "dtc_codes": {
+        "name": "[11·OBD] Diagnostic Trouble Codes"
+      },
+      "dtc_count": {
+        "name": "[11·OBD] Diagnostic Trouble Codes Count"
+      },
+      "configuration_received": {
+        "name": "[12·CFG] Configuration Received"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "update_interval": "Update interval (seconds)",
+          "custom_attributes": "Custom attributes",
+          "max_accuracy": "Max accuracy",
+          "skip_accuracy_filter_for": "Position skip filter for attributes",
+          "events": "Events"
+        },
+        "data_description": {
+          "update_interval": "Polling interval in seconds (minimum 30). Used when WebSocket is unavailable or as fallback.",
+          "custom_attributes": "Add any custom or calculated attributes here. These will be added to the device attributes",
+          "max_accuracy": "Any position reports with accuracy higher than this value will be ignored",
+          "skip_accuracy_filter_for": "Attributes defined here will bypass the accuracy filter if they are present in the update",
+          "events": "Select event types to import as Home Assistant events"
+        }
+      }
     }
   }
 }
