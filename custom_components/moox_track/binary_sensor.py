@@ -1,6 +1,4 @@
-"""Support for MOOX Track binary sensors.
-
-This integration is based on Home Assistant's original implementation, which we adapted and extended to ensure stable operation and full compatibility with MOOX Track.
+"""Binary sensor platform for MOOX Track.
 
 Copyright 2025 MOOX SRLS
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +17,7 @@ limitations under the License.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Generic, Literal, TypeVar
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -36,19 +34,21 @@ from .entity import MooxServerEntity
 from .helpers import get_coordinator_from_entry
 from .moox_client import DeviceModel, PositionModel
 
+_T = TypeVar("_T")
+
 
 @dataclass(frozen=True, kw_only=True)
-class MooxServerBinarySensorEntityDescription[_T](BinarySensorEntityDescription):
-    """Describe MOOX Server sensor entity."""
+class MooxBinarySensorEntityDescription(BinarySensorEntityDescription, Generic[_T]):
+    """Describe a MOOX binary sensor entity."""
 
     data_key: Literal["position", "device", "geofence", "attributes"]
-    entity_registry_enabled_default = False
+    entity_registry_enabled_default: bool = False
     entity_category: EntityCategory | None = EntityCategory.DIAGNOSTIC
     value_fn: Callable[[_T], bool | None]
 
 
 def _to_bool(value: Any) -> bool | None:
-    """Convert a value to bool, handling None, numeric, and boolean types."""
+    """Convert a value to bool."""
     if value is None:
         return None
     if isinstance(value, bool):
@@ -60,11 +60,8 @@ def _to_bool(value: Any) -> bool | None:
     return None
 
 
-MOOX_SERVER_BINARY_SENSOR_ENTITY_DESCRIPTIONS: tuple[
-    MooxServerBinarySensorEntityDescription[Any], ...
-] = (
-    # 10. [05·MOV] Motion
-    MooxServerBinarySensorEntityDescription[PositionModel](
+BINARY_SENSOR_DESCRIPTIONS: tuple[MooxBinarySensorEntityDescription[Any], ...] = (
+    MooxBinarySensorEntityDescription[PositionModel](
         key="attributes.motion",
         data_key="position",
         translation_key="motion",
@@ -73,8 +70,7 @@ MOOX_SERVER_BINARY_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=True,
         value_fn=lambda x: _to_bool((x.get("attributes") or {}).get("motion")),
     ),
-    # 11. [06·IO] Ignition
-    MooxServerBinarySensorEntityDescription[PositionModel](
+    MooxBinarySensorEntityDescription[PositionModel](
         key="attributes.ignition",
         data_key="position",
         translation_key="ignition",
@@ -83,8 +79,7 @@ MOOX_SERVER_BINARY_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=True,
         value_fn=lambda x: _to_bool((x.get("attributes") or {}).get("ignition")),
     ),
-    # 12. [06·IO] Output 1
-    MooxServerBinarySensorEntityDescription[PositionModel](
+    MooxBinarySensorEntityDescription[PositionModel](
         key="attributes.out1",
         data_key="position",
         translation_key="out1",
@@ -92,8 +87,7 @@ MOOX_SERVER_BINARY_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=True,
         value_fn=lambda x: _to_bool((x.get("attributes") or {}).get("out1")),
     ),
-    # 20. [90·DIA] Status (diagnostic)
-    MooxServerBinarySensorEntityDescription[DeviceModel](
+    MooxBinarySensorEntityDescription[DeviceModel](
         key="status",
         data_key="device",
         translation_key="status",
@@ -101,8 +95,7 @@ MOOX_SERVER_BINARY_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=True,
         value_fn=lambda x: None if (s := x["status"]) == "unknown" else s == "online",
     ),
-    # 22. [06·IO] Digital input 1 (hidden)
-    MooxServerBinarySensorEntityDescription[PositionModel](
+    MooxBinarySensorEntityDescription[PositionModel](
         key="attributes.di1",
         data_key="position",
         translation_key="di1",
@@ -125,18 +118,19 @@ async def async_setup_entry(
     def _async_add_new_entities() -> None:
         if not coordinator.data:
             return
-        new_entities: list[MooxServerBinarySensor[Any]] = []
+        new_entities: list[MooxBinarySensor[Any]] = []
         for device_id, device_data in coordinator.data.items():
             if device_id in processed_device_ids:
                 continue
             device = device_data["device"]
-            for description in MOOX_SERVER_BINARY_SENSOR_ENTITY_DESCRIPTIONS:
-                entity = MooxServerBinarySensor(
-                    coordinator=coordinator,
-                    device=device,
-                    description=description,
+            for description in BINARY_SENSOR_DESCRIPTIONS:
+                new_entities.append(
+                    MooxBinarySensor(
+                        coordinator=coordinator,
+                        device=device,
+                        description=description,
+                    )
                 )
-                new_entities.append(entity)
             processed_device_ids.add(device_id)
         if new_entities:
             async_add_entities(new_entities)
@@ -145,30 +139,27 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_async_add_new_entities))
 
 
-class MooxServerBinarySensor[_T](MooxServerEntity, BinarySensorEntity):
-    """Represent a MOOX server binary sensor."""
+class MooxBinarySensor(MooxServerEntity, BinarySensorEntity, Generic[_T]):
+    """Represent a MOOX binary sensor."""
 
     _attr_has_entity_name = True
-    entity_description: MooxServerBinarySensorEntityDescription[_T]
+    entity_description: MooxBinarySensorEntityDescription[_T]
 
     def __init__(
         self,
         coordinator: MooxServerCoordinator,
         device: DeviceModel,
-        description: MooxServerBinarySensorEntityDescription[_T],
+        description: MooxBinarySensorEntityDescription[_T],
     ) -> None:
-        """Initialize the MOOX Server sensor."""
+        """Initialize the binary sensor."""
         super().__init__(coordinator, device)
         self.entity_description = description
-        # Replace dots with underscores in key for unique_id safety
         safe_key = description.key.replace(".", "_")
-        self._attr_unique_id = (
-            f"{self.device_id}_{description.data_key}_{safe_key}"
-        )
+        self._attr_unique_id = f"{self.device_id}_{description.data_key}_{safe_key}"
 
     @property
     def is_on(self) -> bool | None:
-        """Return if the binary sensor is on or not."""
+        """Return True if the binary sensor is on."""
         return self.entity_description.value_fn(
             getattr(self, f"moox_{self.entity_description.data_key}")
         )

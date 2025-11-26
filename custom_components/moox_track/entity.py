@@ -1,7 +1,5 @@
 """Base entity for MOOX Track.
 
-This integration is based on Home Assistant's original implementation, which we adapted and extended to ensure stable operation and full compatibility with MOOX Track.
-
 Copyright 2025 MOOX SRLS
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,14 +18,13 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from .moox_client import DeviceModel, GeofenceModel, PositionModel
-
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import MooxServerCoordinator
+from .moox_client import DeviceModel, GeofenceModel, PositionModel
 
 
 class MooxServerEntity(CoordinatorEntity[MooxServerCoordinator]):
@@ -38,7 +35,7 @@ class MooxServerEntity(CoordinatorEntity[MooxServerCoordinator]):
         coordinator: MooxServerCoordinator,
         device: DeviceModel,
     ) -> None:
-        """Initialize the MOOX Track entity."""
+        """Initialize the entity."""
         super().__init__(coordinator)
         self.device_id = device["id"]
         device_model = device.get("model", "")
@@ -93,7 +90,7 @@ class MooxServerEntity(CoordinatorEntity[MooxServerCoordinator]):
         return self._cached_attributes
 
     def _refresh_cached_data(self) -> None:
-        """Refresh cached coordinator data for this entity."""
+        """Refresh cached coordinator data."""
         if not self.coordinator.data or self.device_id not in self.coordinator.data:
             return
         device_data = self.coordinator.data[self.device_id]
@@ -103,12 +100,12 @@ class MooxServerEntity(CoordinatorEntity[MooxServerCoordinator]):
         self._cached_attributes = device_data.get("attributes") or {}
 
     def _handle_coordinator_update(self) -> None:
-        """Update caches when coordinator data changes."""
+        """Handle coordinator data update."""
         self._refresh_cached_data()
         super()._handle_coordinator_update()
 
     async def async_added_to_hass(self) -> None:
-        """Entity added to hass."""
+        """Handle entity added to Home Assistant."""
         self._refresh_cached_data()
         self.async_on_remove(
             async_dispatcher_connect(

@@ -1,6 +1,4 @@
-"""Constants for the MOOX Track integration.
-
-This integration is based on Home Assistant's original implementation, which we adapted and extended to ensure stable operation and full compatibility with MOOX Track.
+"""Constants for MOOX Track.
 
 Copyright 2025 MOOX SRLS
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,12 +18,13 @@ import re
 from logging import getLogger
 
 DOMAIN = "moox_track"
-LOGGER = getLogger(__package__)
+LOGGER = getLogger(__name__)
 
 
 def to_snake_case(camel_str: str) -> str:
     """Convert camelCase to snake_case."""
     return re.sub(r"(?<!^)(?=[A-Z])", "_", camel_str).lower()
+
 
 ATTR_CATEGORY = "category"
 ATTR_GEOFENCE = "geofence"
@@ -37,6 +36,8 @@ CONF_CUSTOM_ATTRIBUTES = "custom_attributes"
 CONF_EVENTS = "events"
 CONF_SKIP_ACCURACY_FILTER_FOR = "skip_accuracy_filter_for"
 CONF_UPDATE_INTERVAL = "update_interval"
+CONF_EMAIL = "email"
+CONF_USERNAME_DEPRECATED = "username"
 
 EVENTS = {
     "deviceMoving": "device_moving",
@@ -60,4 +61,3 @@ EVENTS = {
     "queuedCommandSent": "queued_command_sent",
     "media": "media",
 }
-

@@ -1,7 +1,5 @@
 """Config flow for MOOX Track integration.
 
-This integration is based on Home Assistant's original implementation, which we adapted and extended to ensure stable operation and full compatibility with MOOX Track.
-
 Copyright 2025 MOOX SRLS
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +20,7 @@ from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
+from aiohttp import CookieJar
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
@@ -30,15 +29,15 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_PORT,
     CONF_SSL,
-    CONF_USERNAME,
     CONF_VERIFY_SSL,
 )
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .const import (
     CONF_CUSTOM_ATTRIBUTES,
+    CONF_EMAIL,
     CONF_EVENTS,
     CONF_MAX_ACCURACY,
     CONF_SKIP_ACCURACY_FILTER_FOR,
@@ -55,12 +54,12 @@ from .moox_client import (
 )
 
 try:
-    from homeassistant.helpers import selector as selectors  # type: ignore[attr-defined]
+    from homeassistant.helpers import selector as selectors
 except ImportError:
     selectors = None  # type: ignore[assignment]
 
 SELECTORS_SUPPORTED = bool(
-    selectors
+    selectors is not None
     and hasattr(selectors, "TextSelector")
     and hasattr(selectors, "TextSelectorConfig")
     and hasattr(selectors, "TextSelectorType")
@@ -75,25 +74,22 @@ SELECTORS_SUPPORTED = bool(
 if SELECTORS_SUPPORTED:
     STEP_USER_DATA_SCHEMA = vol.Schema(
         {
-            vol.Required(CONF_USERNAME): selectors.TextSelector(
-                selectors.TextSelectorConfig(
-                    type=selectors.TextSelectorType.TEXT  # type: ignore[attr-defined]
-                )
+            vol.Required(CONF_EMAIL): selectors.TextSelector(
+                selectors.TextSelectorConfig(type=selectors.TextSelectorType.EMAIL)
             ),
             vol.Required(CONF_PASSWORD): selectors.TextSelector(
-                selectors.TextSelectorConfig(
-                    type=selectors.TextSelectorType.PASSWORD  # type: ignore[attr-defined]
-                )
+                selectors.TextSelectorConfig(type=selectors.TextSelectorType.PASSWORD)
             ),
         }
     )
 else:
     STEP_USER_DATA_SCHEMA = vol.Schema(
         {
-            vol.Required(CONF_USERNAME): cv.string,
+            vol.Required(CONF_EMAIL): cv.string,
             vol.Required(CONF_PASSWORD): cv.string,
         }
     )
+
 
 def _get_options_schema() -> vol.Schema:
     """Get options schema."""
@@ -102,7 +98,7 @@ def _get_options_schema() -> vol.Schema:
             {
                 vol.Optional(
                     CONF_UPDATE_INTERVAL, default=30
-                ): selectors.NumberSelector(  # type: ignore[misc]
+                ): selectors.NumberSelector(
                     selectors.NumberSelectorConfig(
                         mode=selectors.NumberSelectorMode.BOX,
                         min=30,
@@ -112,7 +108,7 @@ def _get_options_schema() -> vol.Schema:
                 ),
                 vol.Optional(
                     CONF_MAX_ACCURACY, default=0.0
-                ): selectors.NumberSelector(  # type: ignore[misc]
+                ): selectors.NumberSelector(
                     selectors.NumberSelectorConfig(
                         mode=selectors.NumberSelectorMode.BOX,
                         min=0.0,
@@ -120,7 +116,7 @@ def _get_options_schema() -> vol.Schema:
                 ),
                 vol.Optional(
                     CONF_CUSTOM_ATTRIBUTES, default=[]
-                ): selectors.SelectSelector(  # type: ignore[misc]
+                ): selectors.SelectSelector(
                     selectors.SelectSelectorConfig(
                         mode=selectors.SelectSelectorMode.DROPDOWN,
                         multiple=True,
@@ -131,7 +127,7 @@ def _get_options_schema() -> vol.Schema:
                 ),
                 vol.Optional(
                     CONF_SKIP_ACCURACY_FILTER_FOR, default=[]
-                ): selectors.SelectSelector(  # type: ignore[misc]
+                ): selectors.SelectSelector(
                     selectors.SelectSelectorConfig(
                         mode=selectors.SelectSelectorMode.DROPDOWN,
                         multiple=True,
@@ -140,7 +136,7 @@ def _get_options_schema() -> vol.Schema:
                         options=[],
                     )
                 ),
-                vol.Optional(CONF_EVENTS, default=[]): selectors.SelectSelector(  # type: ignore[misc]
+                vol.Optional(CONF_EVENTS, default=[]): selectors.SelectSelector(
                     selectors.SelectSelectorConfig(
                         mode=selectors.SelectSelectorMode.DROPDOWN,
                         multiple=True,
@@ -162,10 +158,12 @@ def _get_options_schema() -> vol.Schema:
                 vol.Coerce(float),
                 vol.Range(min=0.0),
             ),
-            vol.Optional(CONF_CUSTOM_ATTRIBUTES, default=[]): cv.ensure_list(cv.string),
-            vol.Optional(
-                CONF_SKIP_ACCURACY_FILTER_FOR, default=[]
-            ): cv.ensure_list(cv.string),
+            vol.Optional(CONF_CUSTOM_ATTRIBUTES, default=[]): cv.ensure_list(
+                cv.string
+            ),
+            vol.Optional(CONF_SKIP_ACCURACY_FILTER_FOR, default=[]): cv.ensure_list(
+                cv.string
+            ),
             vol.Optional(CONF_EVENTS, default=[]): cv.ensure_list(cv.string),
         }
     )
@@ -181,7 +179,7 @@ class MooxOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the first step of the options flow."""
+        """Handle the options flow."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
@@ -194,17 +192,23 @@ class MooxOptionsFlowHandler(config_entries.OptionsFlow):
 class MooxServerConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for MOOX Track."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def _get_server_info(self, user_input: dict[str, Any]) -> ServerModel:
-        """Get server info."""
+        """Validate credentials by fetching server info."""
+        ssl = user_input.get(CONF_SSL, True)
+        verify_ssl = user_input.get(CONF_VERIFY_SSL, True)
+        client_session = async_create_clientsession(
+            self.hass,
+            cookie_jar=CookieJar(unsafe=not ssl or not verify_ssl),
+        )
         client = MooxClient(
-            client_session=async_get_clientsession(self.hass),
+            client_session=client_session,
             host=user_input[CONF_HOST],
             port=user_input[CONF_PORT],
-            ssl=user_input[CONF_SSL],
-            verify_ssl=user_input[CONF_VERIFY_SSL],
-            username=user_input[CONF_USERNAME],
+            ssl=ssl,
+            verify_ssl=verify_ssl,
+            username=user_input[CONF_EMAIL],
             password=user_input[CONF_PASSWORD],
         )
         return await client.get_server()
@@ -216,7 +220,6 @@ class MooxServerConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            # Combine user input with default server settings
             data = {
                 **user_input,
                 CONF_HOST: "app.moox.it",
@@ -224,7 +227,7 @@ class MooxServerConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_SSL: True,
                 CONF_VERIFY_SSL: True,
             }
-            
+
             try:
                 await self._get_server_info(data)
             except MooxAuthenticationException:
@@ -253,22 +256,21 @@ class MooxServerConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reauth(
         self, entry_data: Mapping[str, Any]
     ) -> ConfigFlowResult:
-        """Handle configuration by re-auth."""
+        """Handle re-authentication."""
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """Handle reauth flow."""
+        """Handle re-authentication confirmation."""
         reauth_entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            test_data = {
-                **reauth_entry.data,
-                **user_input,
-            }
+            test_data = dict(reauth_entry.data)
+            test_data[CONF_EMAIL] = user_input[CONF_EMAIL]
+            test_data[CONF_PASSWORD] = user_input[CONF_PASSWORD]
             try:
                 await self._get_server_info(test_data)
             except MooxAuthenticationException:
@@ -283,7 +285,10 @@ class MooxServerConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 return self.async_update_reload_and_abort(
                     reauth_entry,
-                    data_updates=user_input,
+                    data_updates={
+                        CONF_EMAIL: user_input[CONF_EMAIL],
+                        CONF_PASSWORD: user_input[CONF_PASSWORD],
+                    },
                 )
         return self.async_show_form(
             step_id="reauth_confirm",

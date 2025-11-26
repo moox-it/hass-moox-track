@@ -1,6 +1,4 @@
-"""Support for MOOX Track device tracking.
-
-This integration is based on Home Assistant's original implementation, which we adapted and extended to ensure stable operation and full compatibility with MOOX Track.
+"""Device tracker platform for MOOX Track.
 
 Copyright 2025 MOOX SRLS
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.device_tracker import TrackerEntity, SourceType
+from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -43,13 +41,13 @@ async def async_setup_entry(
     def _async_add_new_entities() -> None:
         if not coordinator.data:
             return
-        new_entities: list[MooxServerDeviceTracker] = []
+        new_entities: list[MooxDeviceTracker] = []
         for device_id, device_data in coordinator.data.items():
             if device_id in processed_device_ids:
                 continue
-            device = device_data["device"]
-            entity = MooxServerDeviceTracker(coordinator, device)
-            new_entities.append(entity)
+            new_entities.append(
+                MooxDeviceTracker(coordinator, device_data["device"])
+            )
             processed_device_ids.add(device_id)
         if new_entities:
             async_add_entities(new_entities)
@@ -58,8 +56,8 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_async_add_new_entities))
 
 
-class MooxServerDeviceTracker(MooxServerEntity, TrackerEntity):
-    """Represent a tracked device."""
+class MooxDeviceTracker(MooxServerEntity, TrackerEntity):
+    """Represent a MOOX device tracker."""
 
     _attr_has_entity_name = True
     _attr_name = "[01·TRK]"
@@ -90,6 +88,6 @@ class MooxServerDeviceTracker(MooxServerEntity, TrackerEntity):
 
     @property
     def location_accuracy(self) -> float | None:
-        """Return the gps accuracy of the device."""
+        """Return the GPS accuracy of the device."""
         position = self.moox_position or {}
         return position.get("accuracy")

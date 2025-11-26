@@ -1,16 +1,33 @@
 {
     "config": {
         "abort": {
-            "cloud_not_connected": "Non connesso a Home Assistant Cloud.",
-            "single_instance_allowed": "Gi\u00e0 configurato. \u00c8 possibile una sola configurazione."
+      "already_configured": "Il dispositivo è già configurato",
+      "reauth_successful": "Ri-autenticazione completata con successo"
+    },
+    "error": {
+      "cannot_connect": "Impossibile connettersi",
+      "invalid_auth": "Autenticazione non valida",
+      "unknown": "Errore imprevisto"
         },
-        "create_entry": {
-            "default": "MOOX Track \u00e8 stato configurato correttamente."
+    "step": {
+      "reauth_confirm": {
+        "data": {
+          "email": "Email",
+          "password": "Password"
         },
-        "step": {
-            "user": {
-                "description": "Sei sicuro di voler configurare MOOX Track?",
-                "title": "Imposta MOOX Track"
+        "description": "Le credenziali di autenticazione per {host}:{port} devono essere aggiornate."
+        },
+      "user": {
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        },
+        "data_description": {
+          "email": "L'indirizzo email del tuo account MOOX Track",
+          "password": "La password del tuo account MOOX Track"
+        },
+        "title": "Configura MOOX Track",
+        "description": "Inserisci le credenziali del tuo account MOOX Track per connetterti."
             }
         }
     },
@@ -30,13 +47,6 @@
                     "on": "Online"
                 }
             },
-            "di1": {
-                "name": "[06·IO] Ingresso digitale 1",
-                "state": {
-                    "off": "Spento",
-                    "on": "Acceso"
-                }
-            },
             "ignition": {
                 "name": "[06·IO] Accensione",
                 "state": {
@@ -50,53 +60,18 @@
                     "off": "Spento",
                     "on": "Acceso"
                 }
+      },
+      "di1": {
+        "name": "[06·IO] Ingresso digitale 1",
+        "state": {
+          "off": "Spento",
+          "on": "Acceso"
+        }
             }
         },
         "sensor": {
-            "accuracy": {
-                "name": "[04·FIX] Precisione"
-            },
             "altitude": {
                 "name": "[03·GPS] Altitudine"
-            },
-            "course": {
-                "name": "[04·FIX] Rotta"
-            },
-            "event": {
-                "name": "[08·LOG] Evento"
-            },
-            "geofence": {
-                "name": "[02·LOC] Geofence"
-            },
-            "last_gps_fix_accuracy": {
-                "name": "[93·DIA] Precisione ultimo fix GPS"
-            },
-            "last_gps_fix_altitude": {
-                "name": "[92·DIA] Altitudine ultimo fix GPS"
-            },
-            "last_gps_fix_course": {
-                "name": "[93·DIA] Rotta ultimo fix GPS"
-            },
-            "last_gps_fix_device_time": {
-                "name": "[94·DIA] Ora dispositivo ultimo fix GPS"
-            },
-            "last_gps_fix_fix_time": {
-                "name": "[94·DIA] Ora fix ultimo fix GPS"
-            },
-            "last_gps_fix_latitude": {
-                "name": "[92·DIA] Latitudine ultimo fix GPS"
-            },
-            "last_gps_fix_longitude": {
-                "name": "[92·DIA] Longitudine ultimo fix GPS"
-            },
-            "last_gps_fix_server_time": {
-                "name": "[94·DIA] Ora server ultimo fix GPS"
-            },
-            "last_gps_fix_speed": {
-                "name": "[93·DIA] Velocità ultimo fix GPS"
-            },
-            "last_gps_fix_speed_kmh": {
-                "name": "[93·DIA] Velocità ultimo fix GPS (km/h)"
             },
             "latitude": {
                 "name": "[03·GPS] Latitudine"
@@ -104,20 +79,62 @@
             "longitude": {
                 "name": "[03·GPS] Longitudine"
             },
-            "odometer": {
-                "name": "[08·LOG] Contachilometri"
+      "course": {
+        "name": "[04·FIX] Direzione"
+      },
+      "accuracy": {
+        "name": "[04·FIX] Precisione"
             },
-            "power": {
-                "name": "[07·SYS] Tensione"
+      "sat": {
+        "name": "[07·SYS] Satelliti"
+      },
+      "event": {
+        "name": "[08·LOG] Evento"
             },
             "rssi": {
                 "name": "[07·SYS] RSSI"
             },
-            "sat": {
-                "name": "[07·SYS] Satelliti"
+      "power": {
+        "name": "[07·SYS] Alimentazione"
+      },
+      "odometer": {
+        "name": "[08·LOG] Contachilometri"
+      },
+      "geofence": {
+        "name": "[02·LOC] Area geografica"
+      },
+      "last_gps_fix_latitude": {
+        "name": "[92·DIA] Ultima posizione GPS latitudine"
+      },
+      "last_gps_fix_longitude": {
+        "name": "[92·DIA] Ultima posizione GPS longitudine"
+      },
+      "last_gps_fix_altitude": {
+        "name": "[92·DIA] Ultima posizione GPS altitudine"
+      },
+      "last_gps_fix_speed": {
+        "name": "[93·DIA] Ultima posizione GPS velocità"
+      },
+      "last_gps_fix_speed_kmh": {
+        "name": "[93·DIA] Ultima posizione GPS velocità (km/h)"
+      },
+      "last_gps_fix_course": {
+        "name": "[93·DIA] Ultima posizione GPS direzione"
+      },
+      "last_gps_fix_accuracy": {
+        "name": "[93·DIA] Ultima posizione GPS precisione"
+      },
+      "last_gps_fix_server_time": {
+        "name": "[94·DIA] Ultima posizione GPS ora server"
+      },
+      "last_gps_fix_device_time": {
+        "name": "[94·DIA] Ultima posizione GPS ora dispositivo"
+      },
+      "last_gps_fix_fix_time": {
+        "name": "[94·DIA] Ultima posizione GPS ora fix"
             },
             "speed": {
-                "name": "[05·MOV] Velocità (kn)"
+        "name": "[05·MOV] Velocità (nodi)"
             },
             "speed_kmh": {
                 "name": "[05·MOV] Velocità (km/h)"
@@ -132,10 +149,10 @@
                 "name": "[91·DIA] Ora fix"
             },
             "battery_level": {
-                "name": "[90·DIA] Livello Batteria"
+        "name": "[90·DIA] Livello batteria"
             },
             "event_raw": {
-                "name": "[90·DIA] Evento Raw"
+        "name": "[90·DIA] Evento grezzo"
             },
             "alarms": {
                 "name": "[09·ALM] Allarmi"
@@ -144,20 +161,40 @@
                 "name": "[10·WRN] Avvisi"
             },
             "rpm": {
-                "name": "[11·OBD] Giri Motore"
+        "name": "[11·OBD] Giri motore"
             },
             "fuel": {
-                "name": "[11·OBD] Livello Carburante"
+        "name": "[11·OBD] Livello carburante"
             },
             "dtc_codes": {
-                "name": "[11·OBD] Codici Errore Diagnostici"
+        "name": "[11·OBD] Codici errore diagnostici"
             },
             "dtc_count": {
-                "name": "[11·OBD] Numero Codici Errore"
+        "name": "[11·OBD] Numero codici errore"
             },
             "configuration_received": {
-                "name": "[12·CFG] Configurazione Ricevuta"
+        "name": "[12·CFG] Configurazione ricevuta"
             }
         }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "update_interval": "Intervallo di aggiornamento (secondi)",
+          "custom_attributes": "Attributi personalizzati",
+          "max_accuracy": "Precisione massima",
+          "skip_accuracy_filter_for": "Salta filtro precisione per attributi",
+          "events": "Eventi"
+        },
+        "data_description": {
+          "update_interval": "Intervallo di polling in secondi (minimo 30). Usato quando WebSocket non è disponibile o come fallback.",
+          "custom_attributes": "Aggiungi qui attributi personalizzati o calcolati. Verranno aggiunti agli attributi del dispositivo",
+          "max_accuracy": "Le posizioni con precisione superiore a questo valore verranno ignorate",
+          "skip_accuracy_filter_for": "Gli attributi definiti qui ignoreranno il filtro di precisione se presenti nell'aggiornamento",
+          "events": "Seleziona i tipi di evento da importare come eventi Home Assistant"
+        }
+      }
     }
+  }
 }

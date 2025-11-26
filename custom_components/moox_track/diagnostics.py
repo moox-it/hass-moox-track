@@ -1,7 +1,5 @@
 """Diagnostics platform for MOOX Track.
 
-This integration is based on Home Assistant's original implementation, which we adapted and extended to ensure stable operation and full compatibility with MOOX Track.
-
 Copyright 2025 MOOX SRLS
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,7 +28,7 @@ from .coordinator import MooxServerCoordinator
 from .helpers import get_coordinator_from_entry
 
 KEYS_TO_REDACT = {
-    "area",  # This is the polygon area of a geofence
+    "area",
     CONF_ADDRESS,
     CONF_LATITUDE,
     CONF_LONGITUDE,
@@ -42,6 +40,7 @@ def _entity_state(
     entity: er.RegistryEntry,
     coordinator: MooxServerCoordinator,
 ) -> dict[str, Any] | None:
+    """Get entity state with address redaction."""
     coordinator_data = coordinator.data or {}
     states_to_redact = {
         position_address
@@ -74,7 +73,6 @@ async def async_get_config_entry_diagnostics(
 
     return async_redact_data(
         {
-            "subscription_status": getattr(coordinator.client, "subscription_status", None),
             "config_entry_options": dict(config_entry.options),
             "coordinator_data": coordinator.data,
             "entities": [
@@ -108,7 +106,6 @@ async def async_get_device_diagnostics(
 
     return async_redact_data(
         {
-            "subscription_status": getattr(coordinator.client, "subscription_status", None),
             "config_entry_options": dict(entry.options),
             "coordinator_data": coordinator.data,
             "entities": [

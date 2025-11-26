@@ -12,22 +12,22 @@
     "step": {
       "reauth_confirm": {
         "data": {
-          "username": "[%key:common::config_flow::data::username%]",
+          "email": "[%key:common::config_flow::data::email%]",
           "password": "[%key:common::config_flow::data::password%]"
         },
         "description": "The authentication credentials for {host}:{port} need to be updated."
       },
       "user": {
         "data": {
-          "username": "[%key:common::config_flow::data::username%]",
+          "email": "[%key:common::config_flow::data::email%]",
           "password": "[%key:common::config_flow::data::password%]"
         },
         "data_description": {
-          "username": "The username (email) of your MOOX Track account",
+          "email": "The email address of your MOOX Track account",
           "password": "The password of your MOOX Track account"
         },
         "title": "Set up MOOX Track",
-        "description": "Are you sure you want to set up MOOX Track?"
+        "description": "Enter your MOOX Track account credentials to connect."
       }
     }
   },

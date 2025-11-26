@@ -1,6 +1,4 @@
-"""Support for MOOX Track sensors.
-
-This integration is based on Home Assistant's original implementation, which we adapted and extended to ensure stable operation and full compatibility with MOOX Track.
+"""Sensor platform for MOOX Track.
 
 Copyright 2025 MOOX SRLS
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +17,7 @@ limitations under the License.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Generic, Literal, TypeVar
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -31,14 +29,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     DEGREE,
     PERCENTAGE,
+    EntityCategory,
     UnitOfElectricPotential,
     UnitOfLength,
     UnitOfSpeed,
 )
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
+
 from .coordinator import MooxServerCoordinator
 from .entity import MooxServerEntity
 from .helpers import (
@@ -51,19 +50,21 @@ from .helpers import (
 )
 from .moox_client import DeviceModel, GeofenceModel, PositionModel
 
+_T = TypeVar("_T")
+
 
 @dataclass(frozen=True, kw_only=True)
-class MooxServerSensorEntityDescription[_T](SensorEntityDescription):
-    """Describe MOOX Server sensor entity."""
+class MooxSensorEntityDescription(SensorEntityDescription, Generic[_T]):
+    """Describe a MOOX sensor entity."""
 
     data_key: Literal["position", "device", "geofence", "attributes"]
-    entity_registry_enabled_default = False
-    entity_category = EntityCategory.DIAGNOSTIC
+    entity_registry_enabled_default: bool = False
+    entity_category: EntityCategory | None = EntityCategory.DIAGNOSTIC
     value_fn: Callable[[_T], StateType]
 
 
 def _ensure_float(value: Any) -> float | None:
-    """Try to convert a value to float."""
+    """Convert a value to float."""
     if value is None:
         return None
     if isinstance(value, (int, float)):
@@ -93,22 +94,18 @@ def _knots_to_kmh(value: float | None) -> float | None:
     return value * 1.852
 
 
-
-
-MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
-    MooxServerSensorEntityDescription[Any], ...
-] = (
-    # 2. [02·LOC] Geofence
-    MooxServerSensorEntityDescription[GeofenceModel | None](
+SENSOR_DESCRIPTIONS: tuple[MooxSensorEntityDescription[Any], ...] = (
+    MooxSensorEntityDescription[GeofenceModel | None](
         key="name",
         data_key="geofence",
         translation_key="geofence",
         entity_category=None,
         entity_registry_enabled_default=True,
-        value_fn=lambda x: x.get("name") if x and isinstance(x, dict) and x.get("name") else None,
+        value_fn=lambda x: x.get("name")
+        if x and isinstance(x, dict) and x.get("name")
+        else None,
     ),
-    # 3. [03·GPS] Latitude
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="latitude",
         data_key="position",
         translation_key="latitude",
@@ -118,8 +115,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         native_unit_of_measurement=DEGREE,
         value_fn=lambda x: _ensure_float(x.get("latitude")),
     ),
-    # 4. [03·GPS] Longitude
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="longitude",
         data_key="position",
         translation_key="longitude",
@@ -129,8 +125,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         native_unit_of_measurement=DEGREE,
         value_fn=lambda x: _ensure_float(x.get("longitude")),
     ),
-    # 5. [03·GPS] Altitude
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="altitude",
         data_key="position",
         translation_key="altitude",
@@ -141,8 +136,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=True,
         value_fn=lambda x: _ensure_float(x.get("altitude")),
     ),
-    # 6. [04·FIX] Course
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="course",
         data_key="position",
         translation_key="course",
@@ -152,8 +146,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         suggested_display_precision=0,
         value_fn=lambda x: _ensure_float(x.get("course")),
     ),
-    # 7. [04·FIX] Accuracy
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="accuracy",
         data_key="position",
         translation_key="accuracy",
@@ -165,8 +158,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         suggested_display_precision=1,
         value_fn=lambda x: _ensure_float(x.get("accuracy")),
     ),
-    # 8. [05·MOV] Speed (km/h)
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="speed_kmh",
         data_key="position",
         translation_key="speed_kmh",
@@ -178,8 +170,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=True,
         value_fn=lambda x: _knots_to_kmh(_ensure_float(x.get("speed"))),
     ),
-    # 13. [07·SYS] Satellites
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="attributes.sat",
         data_key="position",
         translation_key="sat",
@@ -188,8 +179,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda x: _ensure_float((x.get("attributes") or {}).get("sat")),
     ),
-    # 14. [07·SYS] RSSI
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="attributes.rssi",
         data_key="position",
         translation_key="rssi",
@@ -197,8 +187,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=True,
         value_fn=lambda x: _ensure_float((x.get("attributes") or {}).get("rssi")),
     ),
-    # 15. [07·SYS] Power
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="attributes.power",
         data_key="position",
         translation_key="power",
@@ -210,8 +199,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         suggested_display_precision=2,
         value_fn=lambda x: _ensure_float((x.get("attributes") or {}).get("power")),
     ),
-    # 16. [08·LOG] Odometer
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="attributes.odometer",
         data_key="position",
         translation_key="odometer",
@@ -221,12 +209,9 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfLength.METERS,
         suggested_display_precision=1,
-        value_fn=lambda x: _ensure_float(
-            (x.get("attributes") or {}).get("odometer")
-        ),
+        value_fn=lambda x: _ensure_float((x.get("attributes") or {}).get("odometer")),
     ),
-    # 17. [08·LOG] Event
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="attributes.event",
         data_key="position",
         translation_key="event",
@@ -237,8 +222,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
             x.get("attributes") or {},
         ),
     ),
-    # 18. [09·ALM] Alarms
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="alarms",
         data_key="position",
         translation_key="alarms",
@@ -248,8 +232,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         if (alarms := detect_alarms(x.get("attributes") or {}, x))
         else None,
     ),
-    # 19. [10·WRN] Warnings
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="warnings",
         data_key="position",
         translation_key="warnings",
@@ -259,8 +242,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         if (warnings := detect_warnings(x.get("attributes") or {}, x))
         else None,
     ),
-    # 21. [05·MOV] Speed (kn) - hidden
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="speed",
         data_key="position",
         translation_key="speed",
@@ -272,8 +254,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=False,
         value_fn=lambda x: _ensure_float(x.get("speed")),
     ),
-    # 23. [11·OBD] RPM - diagnostic hidden
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="attributes.io36",
         data_key="position",
         translation_key="rpm",
@@ -282,8 +263,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda x: process_obdii_data(x.get("attributes") or {}).get("rpm"),
     ),
-    # 24. [11·OBD] Fuel
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="attributes.io48",
         data_key="position",
         translation_key="fuel",
@@ -294,8 +274,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         suggested_display_precision=0,
         value_fn=lambda x: process_obdii_data(x.get("attributes") or {}).get("fuel"),
     ),
-    # 25. [11·OBD] Diagnostic Trouble Codes
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="attributes.io281",
         data_key="position",
         translation_key="dtc_codes",
@@ -305,8 +284,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
             "dtc_codes"
         ),
     ),
-    # 26. [11·OBD] Diagnostic Trouble Codes Count
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="attributes.io30",
         data_key="position",
         translation_key="dtc_count",
@@ -317,8 +295,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
             "dtc_count"
         ),
     ),
-    # 27. [12·CFG] Configuration Received
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="configuration_received",
         data_key="position",
         translation_key="configuration_received",
@@ -328,8 +305,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         if detect_configuration_received(x.get("attributes") or {}).get("received")
         else "No",
     ),
-    # 28. [90·DIA] Battery Level
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="attributes.batteryLevel",
         data_key="position",
         translation_key="battery_level",
@@ -341,8 +317,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=False,
         value_fn=lambda x: (x.get("attributes") or {}).get("batteryLevel"),
     ),
-    # 29. [90·DIA] Event Raw
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="event_raw",
         data_key="position",
         translation_key="event_raw",
@@ -350,8 +325,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=False,
         value_fn=lambda x: (x.get("attributes") or {}).get("event"),
     ),
-    # 30. [91·DIA] Server Time
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="serverTime",
         data_key="position",
         translation_key="server_time",
@@ -359,8 +333,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=False,
         value_fn=lambda x: x.get("serverTime"),
     ),
-    # 31. [91·DIA] Device Time
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="deviceTime",
         data_key="position",
         translation_key="device_time",
@@ -368,8 +341,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=False,
         value_fn=lambda x: x.get("deviceTime"),
     ),
-    # 32. [91·DIA] Fix Time
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="fixTime",
         data_key="position",
         translation_key="fix_time",
@@ -377,8 +349,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=False,
         value_fn=lambda x: x.get("fixTime"),
     ),
-    # 33. [92·DIA] Last GPS Fix Latitude
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="lastGpsFix.latitude",
         data_key="position",
         translation_key="last_gps_fix_latitude",
@@ -388,8 +359,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         suggested_display_precision=6,
         value_fn=lambda x: _ensure_float(_get_nested(x, "lastGpsFix", "latitude")),
     ),
-    # 34. [92·DIA] Last GPS Fix Longitude
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="lastGpsFix.longitude",
         data_key="position",
         translation_key="last_gps_fix_longitude",
@@ -399,8 +369,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         suggested_display_precision=6,
         value_fn=lambda x: _ensure_float(_get_nested(x, "lastGpsFix", "longitude")),
     ),
-    # 35. [92·DIA] Last GPS Fix Altitude
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="lastGpsFix.altitude",
         data_key="position",
         translation_key="last_gps_fix_altitude",
@@ -410,8 +379,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         suggested_display_precision=1,
         value_fn=lambda x: _ensure_float(_get_nested(x, "lastGpsFix", "altitude")),
     ),
-    # 36. [93·DIA] Last GPS Fix Speed (kn)
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="lastGpsFix.speed",
         data_key="position",
         translation_key="last_gps_fix_speed",
@@ -421,8 +389,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         suggested_display_precision=0,
         value_fn=lambda x: _ensure_float(_get_nested(x, "lastGpsFix", "speed")),
     ),
-    # 37. [93·DIA] Last GPS Fix Speed (km/h)
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="lastGpsFix.speed_kmh",
         data_key="position",
         translation_key="last_gps_fix_speed_kmh",
@@ -436,8 +403,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
             _ensure_float(_get_nested(x, "lastGpsFix", "speed"))
         ),
     ),
-    # 38. [93·DIA] Last GPS Fix Course
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="lastGpsFix.course",
         data_key="position",
         translation_key="last_gps_fix_course",
@@ -447,8 +413,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         suggested_display_precision=0,
         value_fn=lambda x: _ensure_float(_get_nested(x, "lastGpsFix", "course")),
     ),
-    # 39. [93·DIA] Last GPS Fix Accuracy
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="lastGpsFix.accuracy",
         data_key="position",
         translation_key="last_gps_fix_accuracy",
@@ -458,8 +423,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         suggested_display_precision=1,
         value_fn=lambda x: _ensure_float(_get_nested(x, "lastGpsFix", "accuracy")),
     ),
-    # 40. [94·DIA] Last GPS Fix Server Time
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="lastGpsFix.serverTime",
         data_key="position",
         translation_key="last_gps_fix_server_time",
@@ -467,8 +431,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=False,
         value_fn=lambda x: _get_nested(x, "lastGpsFix", "serverTime"),
     ),
-    # 41. [94·DIA] Last GPS Fix Device Time
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="lastGpsFix.deviceTime",
         data_key="position",
         translation_key="last_gps_fix_device_time",
@@ -476,8 +439,7 @@ MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS: tuple[
         entity_registry_enabled_default=False,
         value_fn=lambda x: _get_nested(x, "lastGpsFix", "deviceTime"),
     ),
-    # 42. [94·DIA] Last GPS Fix Fix Time
-    MooxServerSensorEntityDescription[PositionModel](
+    MooxSensorEntityDescription[PositionModel](
         key="lastGpsFix.fixTime",
         data_key="position",
         translation_key="last_gps_fix_fix_time",
@@ -500,18 +462,19 @@ async def async_setup_entry(
     def _async_add_new_entities() -> None:
         if not coordinator.data:
             return
-        new_entities: list[MooxServerSensor[Any]] = []
+        new_entities: list[MooxSensor[Any]] = []
         for device_id, device_data in coordinator.data.items():
             if device_id in processed_device_ids:
                 continue
             device = device_data["device"]
-            for description in MOOX_SERVER_SENSOR_ENTITY_DESCRIPTIONS:
-                entity = MooxServerSensor(
-                    coordinator=coordinator,
-                    device=device,
-                    description=description,
+            for description in SENSOR_DESCRIPTIONS:
+                new_entities.append(
+                    MooxSensor(
+                        coordinator=coordinator,
+                        device=device,
+                        description=description,
+                    )
                 )
-                new_entities.append(entity)
             processed_device_ids.add(device_id)
         if new_entities:
             async_add_entities(new_entities)
@@ -520,30 +483,27 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_async_add_new_entities))
 
 
-class MooxServerSensor[_T](MooxServerEntity, SensorEntity):
-    """Represent a tracked device."""
+class MooxSensor(MooxServerEntity, SensorEntity, Generic[_T]):
+    """Represent a MOOX sensor."""
 
     _attr_has_entity_name = True
-    entity_description: MooxServerSensorEntityDescription[_T]
+    entity_description: MooxSensorEntityDescription[_T]
 
     def __init__(
         self,
         coordinator: MooxServerCoordinator,
         device: DeviceModel,
-        description: MooxServerSensorEntityDescription[_T],
+        description: MooxSensorEntityDescription[_T],
     ) -> None:
-        """Initialize the MOOX Server sensor."""
+        """Initialize the sensor."""
         super().__init__(coordinator, device)
         self.entity_description = description
-        # Replace dots with underscores in key for unique_id safety
         safe_key = description.key.replace(".", "_")
-        self._attr_unique_id = (
-            f"{self.device_id}_{description.data_key}_{safe_key}"
-        )
+        self._attr_unique_id = f"{self.device_id}_{description.data_key}_{safe_key}"
 
     @property
     def native_value(self) -> StateType:
-        """Return the value of the sensor."""
+        """Return the sensor value."""
         return self.entity_description.value_fn(
             getattr(self, f"moox_{self.entity_description.data_key}")
         )

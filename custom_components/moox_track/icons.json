@@ -23,10 +23,10 @@
         }
       },
       "ignition": {
-        "default": "mdi:car-key",
+        "default": "mdi:key",
         "state": {
-          "off": "mdi:car-key-off",
-          "on": "mdi:car-key"
+          "off": "mdi:key-outline",
+          "on": "mdi:key"
         }
       },
       "out1": {
@@ -118,6 +118,30 @@
       },
       "fix_time": {
         "default": "mdi:clock-outline"
+      },
+      "alarms": {
+        "default": "mdi:alert"
+      },
+      "warnings": {
+        "default": "mdi:alert-circle-outline"
+      },
+      "rpm": {
+        "default": "mdi:gauge"
+      },
+      "fuel": {
+        "default": "mdi:fuel"
+      },
+      "dtc_codes": {
+        "default": "mdi:engine"
+      },
+      "dtc_count": {
+        "default": "mdi:engine-outline"
+      },
+      "configuration_received": {
+        "default": "mdi:check-circle"
+      },
+      "event_raw": {
+        "default": "mdi:code-json"
       }
     }
   }

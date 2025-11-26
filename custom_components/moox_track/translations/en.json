@@ -1,16 +1,33 @@
 {
     "config": {
         "abort": {
-            "cloud_not_connected": "Not connected to Home Assistant Cloud.",
-            "single_instance_allowed": "Already configured. Only a single configuration possible."
+      "already_configured": "Device is already configured",
+      "reauth_successful": "Re-authentication was successful"
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
         },
-        "create_entry": {
-            "default": "MOOX Track has been configured successfully."
+    "step": {
+      "reauth_confirm": {
+        "data": {
+          "email": "Email",
+          "password": "Password"
         },
-        "step": {
-            "user": {
-                "description": "Are you sure you want to set up MOOX Track?",
-                "title": "Set up MOOX Track"
+        "description": "The authentication credentials for {host}:{port} need to be updated."
+        },
+      "user": {
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        },
+        "data_description": {
+          "email": "The email address of your MOOX Track account",
+          "password": "The password of your MOOX Track account"
+        },
+        "title": "Set up MOOX Track",
+        "description": "Enter your MOOX Track account credentials to connect."
             }
         }
     },
@@ -30,13 +47,6 @@
                     "on": "Online"
                 }
             },
-            "di1": {
-                "name": "[06·IO] Digital input 1",
-                "state": {
-                    "off": "Off",
-                    "on": "On"
-                }
-            },
             "ignition": {
                 "name": "[06·IO] Ignition",
                 "state": {
@@ -50,38 +60,48 @@
                     "off": "Off",
                     "on": "On"
                 }
+      },
+      "di1": {
+        "name": "[06·IO] Digital input 1",
+        "state": {
+          "off": "Off",
+          "on": "On"
+        }
             }
         },
         "sensor": {
-            "accuracy": {
-                "name": "[04·FIX] Accuracy"
-            },
             "altitude": {
                 "name": "[03·GPS] Altitude"
             },
+      "latitude": {
+        "name": "[03·GPS] Latitude"
+      },
+      "longitude": {
+        "name": "[03·GPS] Longitude"
+      },
             "course": {
                 "name": "[04·FIX] Course"
             },
+      "accuracy": {
+        "name": "[04·FIX] Accuracy"
+      },
+      "sat": {
+        "name": "[07·SYS] Satellites"
+      },
             "event": {
                 "name": "[08·LOG] Event"
             },
+      "rssi": {
+        "name": "[07·SYS] RSSI"
+      },
+      "power": {
+        "name": "[07·SYS] Power"
+      },
+      "odometer": {
+        "name": "[08·LOG] Odometer"
+      },
             "geofence": {
                 "name": "[02·LOC] Geofence"
-            },
-            "last_gps_fix_accuracy": {
-                "name": "[93·DIA] Last GPS fix accuracy"
-            },
-            "last_gps_fix_altitude": {
-                "name": "[92·DIA] Last GPS fix altitude"
-            },
-            "last_gps_fix_course": {
-                "name": "[93·DIA] Last GPS fix course"
-            },
-            "last_gps_fix_device_time": {
-                "name": "[94·DIA] Last GPS fix device time"
-            },
-            "last_gps_fix_fix_time": {
-                "name": "[94·DIA] Last GPS fix fix time"
             },
             "last_gps_fix_latitude": {
                 "name": "[92·DIA] Last GPS fix latitude"
@@ -89,8 +109,8 @@
             "last_gps_fix_longitude": {
                 "name": "[92·DIA] Last GPS fix longitude"
             },
-            "last_gps_fix_server_time": {
-                "name": "[94·DIA] Last GPS fix server time"
+      "last_gps_fix_altitude": {
+        "name": "[92·DIA] Last GPS fix altitude"
             },
             "last_gps_fix_speed": {
                 "name": "[93·DIA] Last GPS fix speed"
@@ -98,23 +118,20 @@
             "last_gps_fix_speed_kmh": {
                 "name": "[93·DIA] Last GPS fix speed (km/h)"
             },
-            "latitude": {
-                "name": "[03·GPS] Latitude"
+      "last_gps_fix_course": {
+        "name": "[93·DIA] Last GPS fix course"
             },
-            "longitude": {
-                "name": "[03·GPS] Longitude"
+      "last_gps_fix_accuracy": {
+        "name": "[93·DIA] Last GPS fix accuracy"
             },
-            "odometer": {
-                "name": "[08·LOG] Odometer"
+      "last_gps_fix_server_time": {
+        "name": "[94·DIA] Last GPS fix server time"
             },
-            "power": {
-                "name": "[07·SYS] Power"
+      "last_gps_fix_device_time": {
+        "name": "[94·DIA] Last GPS fix device time"
             },
-            "rssi": {
-                "name": "[07·SYS] RSSI"
-            },
-            "sat": {
-                "name": "[07·SYS] Satellites"
+      "last_gps_fix_fix_time": {
+        "name": "[94·DIA] Last GPS fix fix time"
             },
             "speed": {
                 "name": "[05·MOV] Speed (kn)"
@@ -159,5 +176,25 @@
                 "name": "[12·CFG] Configuration Received"
             }
         }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "update_interval": "Update interval (seconds)",
+          "custom_attributes": "Custom attributes",
+          "max_accuracy": "Max accuracy",
+          "skip_accuracy_filter_for": "Position skip filter for attributes",
+          "events": "Events"
+        },
+        "data_description": {
+          "update_interval": "Polling interval in seconds (minimum 30). Used when WebSocket is unavailable or as fallback.",
+          "custom_attributes": "Add any custom or calculated attributes here. These will be added to the device attributes",
+          "max_accuracy": "Any position reports with accuracy higher than this value will be ignored",
+          "skip_accuracy_filter_for": "Attributes defined here will bypass the accuracy filter if they are present in the update",
+          "events": "Select event types to import as Home Assistant events"
+        }
+      }
     }
+  }
 }

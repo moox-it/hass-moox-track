@@ -1,6 +1,6 @@
 # MOOX Track – Custom Integration for Home Assistant
 
-[![Version](https://img.shields.io/badge/version-2.0-blue.svg)](https://github.com/moox-it/hass-moox-track) [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://www.hacs.xyz/)
+[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/moox-it/hass-moox-track) [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://www.hacs.xyz/)
 
 [![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=moox-it&repository=hass-moox-track&category=integration) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
@@ -26,6 +26,14 @@ Professional GPS tracking integration for Home Assistant. Seamlessly integrate M
 - 🔐 **Zero Dependencies** - No external packages, direct server communication
 
 ---
+
+## 🚀 Version 2.0.1 Highlights
+
+- ✅ **Silent Token Expiration Handling** - Automatic re-authentication without errors or user intervention
+- ✅ **Silent Connection Error Handling** - Graceful handling of server unreachability with automatic retries
+- ✅ **Production-Ready Reliability** - Comprehensive edge case handling and robust error recovery
+- ✅ **Enhanced Error Handling** - Better handling of malformed API responses and edge cases
+- ✅ **Improved Stability** - Continuous operation even during network issues or token expiration
 
 ## 🚀 Version 2.0 Highlights
 

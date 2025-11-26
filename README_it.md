@@ -2,7 +2,7 @@
 
 # MOOX Track – Integrazione personalizzata per Home Assistant
 
-[![Version](https://img.shields.io/badge/version-2.0-blue.svg)](https://github.com/moox-it/hass-moox-track) [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://www.hacs.xyz/)
+[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/moox-it/hass-moox-track) [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://www.hacs.xyz/)
 
 [![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=moox-it&repository=hass-moox-track&category=integration) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
@@ -26,6 +26,14 @@ Integrazione professionale di tracciamento GPS per Home Assistant. Integra perfe
 - 🔐 **Zero Dipendenze** - Nessun pacchetto esterno, comunicazione diretta con server
 
 ---
+
+## 🚀 Novità Versione 2.0.1
+
+- ✅ **Gestione Silenziosa Scadenza Token** - Re-autenticazione automatica senza errori o intervento utente
+- ✅ **Gestione Silenziosa Errori di Connessione** - Gestione elegante dell'irraggiungibilità del server con tentativi automatici
+- ✅ **Affidabilità Pronta per Produzione** - Gestione completa dei casi limite e recupero robusto dagli errori
+- ✅ **Gestione Errori Migliorata** - Migliore gestione delle risposte API malformate e casi limite
+- ✅ **Stabilità Migliorata** - Funzionamento continuo anche durante problemi di rete o scadenza token
 
 ## 🚀 Novità Versione 2.0
 

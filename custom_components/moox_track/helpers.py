@@ -1,6 +1,4 @@
-"""Helper functions for the MOOX Track integration.
-
-This integration is based on Home Assistant's original implementation, which we adapted and extended to ensure stable operation and full compatibility with MOOX Track.
+"""Helper functions for MOOX Track.
 
 Copyright 2025 MOOX SRLS
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,21 +16,37 @@ limitations under the License.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Iterable, cast
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
+
     from .coordinator import MooxServerCoordinator
 
 from .moox_client import DeviceModel, GeofenceModel, PositionModel
 
 
 def get_device(device_id: int, devices: list[DeviceModel]) -> DeviceModel | None:
-    """Return the device."""
+    """Return the device with the given ID."""
     return next(
         (dev for dev in devices if dev.get("id") == device_id),
         None,
     )
+
+
+def _normalize_id_list(raw_ids: Iterable[Any] | None) -> list[int]:
+    """Normalize an iterable of raw IDs to a list of int."""
+    if raw_ids is None:
+        return []
+    result: list[int] = []
+    for raw in raw_ids:
+        if raw is None:
+            continue
+        try:
+            result.append(int(raw))
+        except (ValueError, TypeError):
+            continue
+    return result
 
 
 def get_first_geofence(
@@ -42,19 +56,18 @@ def get_first_geofence(
     """Return the first matching geofence."""
     if not target or not geofences:
         return None
-    
+    normalized_target = set(_normalize_id_list(target))
+    if not normalized_target:
+        return None
     for geofence in geofences:
         geofence_id = geofence.get("id")
-        if geofence_id is not None:
-            try:
-                # Convert to int for comparison
-                geofence_id = int(geofence_id)
-                if geofence_id in target:
-                    return geofence
-            except (ValueError, TypeError):
-                # Skip geofences with invalid ID format
-                continue
-    
+        if geofence_id is None:
+            continue
+        try:
+            if int(geofence_id) in normalized_target:
+                return geofence
+        except (ValueError, TypeError):
+            continue
     return None
 
 
@@ -62,59 +75,22 @@ def get_geofence_ids(
     device: DeviceModel,
     position: PositionModel,
 ) -> list[int]:
-    """Return a list of geofence IDs from position or device for compatibility."""
+    """Return geofence IDs from position or device."""
     geofence_ids = position.get("geofenceIds")
-    if geofence_ids is not None:
-        # Ensure it's a list and convert to integers if needed
-        if isinstance(geofence_ids, list):
-            result = []
-            for gid in geofence_ids:
-                if gid is not None:
-                    try:
-                        result.append(int(gid))
-                    except (ValueError, TypeError):
-                        # Skip invalid geofence IDs
-                        continue
-            return result
-        return []
-    
+    if isinstance(geofence_ids, list):
+        return _normalize_id_list(geofence_ids)
+
     geofence_ids = device.get("geofenceIds")
-    if geofence_ids is not None:
-        # Ensure it's a list and convert to integers if needed
-        if isinstance(geofence_ids, list):
-            result = []
-            for gid in geofence_ids:
-                if gid is not None:
-                    try:
-                        result.append(int(gid))
-                    except (ValueError, TypeError):
-                        # Skip invalid geofence IDs
-                        continue
-            return result
-        return []
-    
+    if isinstance(geofence_ids, list):
+        return _normalize_id_list(geofence_ids)
+
     return []
 
 
 def get_coordinator_from_entry(entry: ConfigEntry) -> MooxServerCoordinator:
-    """Get coordinator from config entry with validation.
-    
-    This helper function centralizes the common pattern of retrieving and validating
-    the coordinator from a config entry's runtime_data. It follows Home Assistant
-    best practices for type safety and error handling.
-    
-    Args:
-        entry: Config entry to get coordinator from
-        
-    Returns:
-        MooxServerCoordinator instance
-        
-    Raises:
-        RuntimeError: If coordinator is not available in entry runtime_data
-    """
-    # Import here to avoid circular import
+    """Get coordinator from config entry."""
     from .coordinator import MooxServerCoordinator
-    
+
     coordinator = cast(MooxServerCoordinator, entry.runtime_data)
     if coordinator is None:
         raise RuntimeError("MOOX Track coordinator is not available")
@@ -125,21 +101,9 @@ def convert_event_code_to_text(
     event_code: int | None,
     attributes: dict[str, Any],
 ) -> str | None:
-    """Convert numeric event code to readable English text.
-    
-    IMPORTANT: Direct conversion code → text, NO additional checks on other attributes.
-    This follows the official MOOX/Traccar API documentation.
-    
-    Args:
-        event_code: Numeric event code (239, 240, 246, 249, 252, etc.)
-        attributes: Position attributes dictionary (unused, kept for compatibility)
-        
-    Returns:
-        Readable English text description of the event, or None if event_code is None, 0, or empty
-    """
+    """Convert numeric event code to readable text."""
     if event_code is None or event_code == 0 or event_code == "":
         return None
-    
     event_map = {
         239: "Ignition Event",
         240: "Motion Event",
@@ -147,80 +111,67 @@ def convert_event_code_to_text(
         249: "Jamming Event",
         252: "Battery Event",
     }
-    
     return event_map.get(event_code, f"Unknown Event ({event_code})")
+
+
+ALARM_MAP = {
+    "general": "General Alarm",
+    "sos": "SOS",
+    "vibration": "Vibration",
+    "movement": "Movement",
+    "lowspeed": "Low Speed",
+    "overspeed": "Overspeed",
+    "fallDown": "Possible Fall Detected",
+    "lowPower": "Battery Voltage Below Limit",
+    "lowBattery": "GPS Battery Is Low",
+    "fault": "Vehicle Failure Code Detected",
+    "powerOff": "Ignition Off",
+    "powerOn": "Ignition On",
+    "door": "Door",
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "geofence": "Area",
+    "geofenceEnter": "Enter Area",
+    "geofenceExit": "Exit Area",
+    "gpsAntennaCut": "GPS Antenna Removed",
+    "accident": "Possible Accident Detected",
+    "tow": "Possible Vehicle Towing Detected",
+    "idle": "Excessive Idling",
+    "highRpm": "High RPM",
+    "hardAcceleration": "Harsh Acceleration Detected",
+    "hardBraking": "Harsh Braking Detected",
+    "hardCornering": "Harsh Steering Detected",
+    "laneChange": "Lane Change Detected",
+    "fatigueDriving": "Tired Driver",
+    "powerCut": "GPS Disconnected From Battery",
+    "powerRestored": "Alarm Cleared, GPS Connected To Battery",
+    "jamming": "Possible Jamming Attempt Detected",
+    "temperature": "Temperature",
+    "parking": "Parking",
+    "shock": "Impact",
+    "bonnet": "Bonnet",
+    "footBrake": "Foot Brake",
+    "fuelLeak": "Fuel Leak",
+    "tampering": "Tampering",
+    "removing": "Removing",
+}
 
 
 def detect_alarms(
     attributes: dict[str, Any],
     position: PositionModel,
 ) -> list[str]:
-    """Detect alarms from API attributes.alarm field only.
-    
-    IMPORTANT: Alarms are recognized ONLY from attributes.alarm when present.
-    NO alarms are derived from attribute combinations.
-    This follows the official MOOX/Traccar API documentation.
-    
-    Args:
-        attributes: Position attributes dictionary
-        position: Position model (unused, kept for compatibility)
-        
-    Returns:
-        List of alarm descriptions in English, or empty list if no alarm
-    """
+    """Detect alarms from attributes."""
     alarm_value = attributes.get("alarm")
-    
     if not alarm_value:
         return []
-    
-    alarm_map = {
-        "general": "General Alarm",
-        "sos": "SOS",
-        "vibration": "Vibration",
-        "movement": "Movement",
-        "lowspeed": "Low Speed",
-        "overspeed": "Overspeed",
-        "fallDown": "Possible Fall Detected",
-        "lowPower": "Battery Voltage Below Limit",
-        "lowBattery": "GPS Battery Is Low",
-        "fault": "Vehicle Failure Code Detected",
-        "powerOff": "Ignition Off",
-        "powerOn": "Ignition On",
-        "door": "Door",
-        "lock": "Lock",
-        "unlock": "Unlock",
-        "geofence": "Area",
-        "geofenceEnter": "Enter Area",
-        "geofenceExit": "Exit Area",
-        "gpsAntennaCut": "GPS Antenna Removed",
-        "accident": "Possible Accident Detected",
-        "tow": "Possible Vehicle Towing Detected",
-        "idle": "Excessive Idling",
-        "highRpm": "High RPM",
-        "hardAcceleration": "Harsh Acceleration Detected",
-        "hardBraking": "Harsh Braking Detected",
-        "hardCornering": "Harsh Steering Detected",
-        "laneChange": "Lane Change Detected",
-        "fatigueDriving": "Tired Driver",
-        "powerCut": "GPS Disconnected From Battery",
-        "powerRestored": "Alarm Cleared, GPS Connected To Battery",
-        "jamming": "Possible Jamming Attempt Detected",
-        "temperature": "Temperature",
-        "parking": "Parking",
-        "shock": "Impact",
-        "bonnet": "Bonnet",
-        "footBrake": "Foot Brake",
-        "fuelLeak": "Fuel Leak",
-        "tampering": "Tampering",
-        "removing": "Removing",
-    }
-    
+
     alarm_str = str(alarm_value).lower()
-    alarm_description = alarm_map.get(alarm_str)
-    
+    alarm_description = ALARM_MAP.get(alarm_str)
+
     if alarm_description:
         return [alarm_description]
-    
+
     return [str(alarm_value).title()]
 
 
@@ -228,42 +179,26 @@ def detect_warnings(
     attributes: dict[str, Any],
     position: PositionModel,
 ) -> list[str]:
-    """Detect special exception conditions from attributes.
-    
-    IMPORTANT: Only 3 special exceptions are detected (in priority order):
-    1. Configuration Received (priority 1 - highest)
-    2. Approximate Position (priority 2 - medium)
-    3. Sleep Mode (priority 3 - lowest)
-    
-    This follows the official MOOX/Traccar API documentation.
-    NO other warnings are calculated from attribute combinations.
-    
-    Args:
-        attributes: Position attributes dictionary
-        position: Position model (unused, kept for compatibility)
-        
-    Returns:
-        List of warning descriptions in English, or empty list if no warnings
-    """
+    """Detect warning conditions from attributes."""
     warnings: list[str] = []
     sleep_mode = attributes.get("io200")
     is_sleep_mode = sleep_mode is not None and sleep_mode != 0
-    
+
     result = attributes.get("result")
     if result is not None and result != "" and not is_sleep_mode:
         warnings.append("Configuration Received")
         return warnings
-    
+
     sat = attributes.get("sat")
     rssi = attributes.get("rssi")
-    
+
     rssi_numeric = None
     if rssi is not None:
         try:
             rssi_numeric = float(rssi)
         except (ValueError, TypeError):
             pass
-    
+
     if (
         (sat is None or sat == 0)
         and rssi_numeric is not None
@@ -272,22 +207,15 @@ def detect_warnings(
     ):
         warnings.append("Approximate Position")
         return warnings
-    
+
     if is_sleep_mode:
         warnings.append("Sleep Mode Active")
-    
+
     return warnings
 
 
 def process_obdii_data(attributes: dict[str, Any]) -> dict[str, Any]:
-    """Process OBD-II diagnostic data.
-    
-    Args:
-        attributes: Position attributes dictionary
-        
-    Returns:
-        Dictionary with OBD-II data (rpm, fuel, dtc_codes, dtc_count, has_errors)
-    """
+    """Process OBD-II diagnostic data."""
     obdii: dict[str, Any] = {
         "rpm": None,
         "fuel": None,
@@ -295,55 +223,48 @@ def process_obdii_data(attributes: dict[str, Any]) -> dict[str, Any]:
         "dtc_count": 0,
         "has_errors": False,
     }
-    
+
     io36 = attributes.get("io36")
     if io36 is not None:
         obdii["rpm"] = int(io36) if isinstance(io36, (int, float)) else None
-    
+
     io48 = attributes.get("io48")
     if io48 is not None:
         obdii["fuel"] = int(io48) if isinstance(io48, (int, float)) else None
-    
+
     io281 = attributes.get("io281")
     if io281 is not None and io281 != "":
         obdii["dtc_codes"] = str(io281)
-    
+
     io30 = attributes.get("io30")
     if io30 is not None:
         obdii["dtc_count"] = int(io30) if isinstance(io30, (int, float)) else 0
         if obdii["dtc_count"] > 0:
             obdii["has_errors"] = True
-    
+
     return obdii
 
 
 def detect_configuration_received(attributes: dict[str, Any]) -> dict[str, Any]:
-    """Detect when device has received and applied a configuration command.
-    
-    Args:
-        attributes: Position attributes dictionary
-        
-    Returns:
-        Dictionary with configuration info (received, result, parameters)
-    """
+    """Detect when device has received a configuration command."""
     configuration: dict[str, Any] = {
         "received": False,
         "result": None,
         "parameters": [],
     }
-    
+
     result = attributes.get("result")
     if result is None or result == "":
         return configuration
-    
+
     result_str = str(result)
     if "New value " in result_str:
         configuration["received"] = True
         configuration["result"] = result_str
-        
+
         param_string = result_str.replace("New value ", "").strip()
         param_strings = param_string.split(",")
-        
+
         for param_string_item in param_strings:
             param_string_item = param_string_item.strip()
             if "=" in param_string_item:
@@ -354,5 +275,5 @@ def detect_configuration_received(attributes: dict[str, Any]) -> dict[str, Any]:
                         "value": parts[1].strip(),
                     }
                     configuration["parameters"].append(parameter)
-    
+
     return configuration
