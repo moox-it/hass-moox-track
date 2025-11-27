@@ -24,9 +24,10 @@ from typing import Any, TypedDict
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout
 
-MAX_LOGIN_RETRIES = 10
 LOGIN_RETRY_DELAY = 30.0
 LOGIN_BACKOFF_MULTIPLIER = 1.5
+MAX_BACKOFF_EXPONENT = 5
+AUTH_INTERNAL_RETRIES = 3
 
 
 class MooxException(Exception):
@@ -128,8 +129,37 @@ class MooxClient:
             connect=self.CONNECT_TIMEOUT,
             total=self.TOTAL_TIMEOUT,
         )
-        self._consecutive_login_failures = 0
+        self._login_attempt_count = 0
         self._last_login_attempt: datetime | None = None
+        self._ever_authenticated = False
+        self._session_expiration_in_progress = False
+
+    def _mark_session_authenticated(self) -> None:
+        """Mark the current session as authenticated."""
+        self._authenticated = True
+        self._ever_authenticated = True
+        self._session_expiration_in_progress = False
+        self._login_attempt_count = 0
+
+    def _clear_auth_state_for_reauth(self) -> None:
+        """Clear auth state for re-authentication while preserving history."""
+        self._authenticated = False
+        self._session_expiration_in_progress = True
+        self._clear_session_cookies()
+
+    def _reset_for_credential_failure(self) -> None:
+        """Full reset after confirmed credential failure."""
+        self._authenticated = False
+        self._ever_authenticated = False
+        self._session_expiration_in_progress = False
+        self._clear_session_cookies()
+
+    def _clear_session_cookies(self) -> None:
+        """Clear session cookies."""
+        try:
+            self._session.cookie_jar.clear()
+        except Exception:
+            pass
 
     @property
     def base_url(self) -> str:
@@ -137,28 +167,26 @@ class MooxClient:
         return self._base_url
 
     @property
-    def login_failures_exceeded(self) -> bool:
-        """Return True if max login retry attempts have been exceeded."""
-        return self._consecutive_login_failures >= MAX_LOGIN_RETRIES
-
-    def reset_login_failures(self) -> None:
-        """Reset the login failure counter."""
-        self._consecutive_login_failures = 0
-        self._last_login_attempt = None
+    def ever_authenticated(self) -> bool:
+        """Return True if credentials have ever worked."""
+        return self._ever_authenticated
 
     async def _wait_for_login_retry(self) -> None:
-        """Wait before attempting re-login with exponential backoff."""
+        """Wait with exponential backoff before retry."""
         if self._last_login_attempt is None:
             return
 
         elapsed = (datetime.now() - self._last_login_attempt).total_seconds()
+        exponent = max(self._login_attempt_count - 2, 0)
         base_delay = LOGIN_RETRY_DELAY * (
-            LOGIN_BACKOFF_MULTIPLIER ** min(self._consecutive_login_failures, 5)
+            LOGIN_BACKOFF_MULTIPLIER ** min(exponent, MAX_BACKOFF_EXPONENT)
         )
         if elapsed < base_delay:
             await asyncio.sleep(base_delay - elapsed)
 
-    async def _authenticate(self) -> None:
+    async def _authenticate(
+        self, *, skip_rate_limit: bool = False, is_reauth: bool = False
+    ) -> None:
         """Authenticate with the MOOX server."""
         if self._authenticated:
             return
@@ -167,71 +195,109 @@ class MooxClient:
             if self._authenticated:
                 return
 
-            if self.login_failures_exceeded:
-                raise MooxAuthenticationException(
-                    f"Max login attempts ({MAX_LOGIN_RETRIES}) exceeded"
-                )
+            self._login_attempt_count += 1
 
-            await self._wait_for_login_retry()
+            if not skip_rate_limit:
+                await self._wait_for_login_retry()
             self._last_login_attempt = datetime.now()
 
-            try:
-                payload = {
-                    "email": self._username,
-                    "password": self._password,
-                    "remember_me": "true",
-                }
+            last_error: Exception | None = None
+            for auth_attempt in range(AUTH_INTERNAL_RETRIES):
+                try:
+                    if is_reauth or auth_attempt > 0:
+                        self._clear_session_cookies()
 
-                async with self._session.post(
-                    f"{self._base_url}/session",
-                    json=payload,
-                    ssl=self._verify_ssl if self._ssl else False,
-                    timeout=self._timeout,
-                ) as response:
-                    if response.status == 200:
-                        self._authenticated = True
-                        self._consecutive_login_failures = 0
-                        return
+                    payload = {
+                        "email": self._username,
+                        "password": self._password,
+                        "remember_me": "true",
+                    }
 
-                    if response.status == 400:
+                    async with self._session.post(
+                        f"{self._base_url}/session",
+                        json=payload,
+                        ssl=self._verify_ssl if self._ssl else False,
+                        timeout=self._timeout,
+                    ) as response:
+                        if response.status == 200:
+                            self._mark_session_authenticated()
+                            return
+
+                        if response.status == 400:
+                            text = await response.text()
+                            try:
+                                error_data = json.loads(text)
+                                if isinstance(error_data, dict) and str(
+                                    error_data.get("error", "")
+                                ) == "ERROR_004":
+                                    if not self._ever_authenticated:
+                                        self._reset_for_credential_failure()
+                                    else:
+                                        self._authenticated = False
+                                        self._clear_session_cookies()
+                                    raise MooxAuthenticationException(
+                                        error_data.get(
+                                            "message", "Invalid email or password"
+                                        )
+                                    )
+                            except (json.JSONDecodeError, ValueError):
+                                pass
+                            last_error = MooxException(
+                                f"Authentication failed: {text}"
+                            )
+                            if auth_attempt < AUTH_INTERNAL_RETRIES - 1:
+                                await asyncio.sleep(min(2**auth_attempt, 5))
+                                continue
+                            self._authenticated = False
+                            self._session_expiration_in_progress = False
+                            self._clear_session_cookies()
+                            raise last_error
+
+                        if response.status >= 500:
+                            last_error = MooxConnectionException(
+                                f"Server error: {response.status}"
+                            )
+                            if auth_attempt < AUTH_INTERNAL_RETRIES - 1:
+                                await asyncio.sleep(min(2**auth_attempt, 5))
+                                continue
+                            raise last_error
+
                         text = await response.text()
-                        try:
-                            error_data = json.loads(text)
-                            if isinstance(error_data, dict) and str(
-                                error_data.get("error", "")
-                            ) == "ERROR_004":
-                                self._consecutive_login_failures += 1
-                                raise MooxAuthenticationException(
-                                    error_data.get("message", "Invalid email or password")
-                                )
-                        except (json.JSONDecodeError, ValueError):
-                            pass
-                        self._consecutive_login_failures += 1
-                        raise MooxAuthenticationException(
-                            f"Authentication failed: {text}"
+                        last_error = MooxException(
+                            f"Authentication failed: {response.status}: {text}"
                         )
+                        if auth_attempt < AUTH_INTERNAL_RETRIES - 1:
+                            await asyncio.sleep(min(2**auth_attempt, 5))
+                            continue
+                        raise last_error
 
-                    if response.status >= 500:
-                        raise MooxConnectionException(
-                            f"Server error: {response.status}"
-                        )
+                except MooxAuthenticationException:
+                    raise
+                except asyncio.TimeoutError as err:
+                    last_error = MooxConnectionException(f"Timeout: {err}")
+                    if auth_attempt < AUTH_INTERNAL_RETRIES - 1:
+                        await asyncio.sleep(min(2**auth_attempt, 5))
+                        continue
+                    raise MooxConnectionException(
+                        f"Authentication timeout after {AUTH_INTERNAL_RETRIES} attempts"
+                    ) from err
+                except (
+                    aiohttp.ClientConnectorError,
+                    aiohttp.ServerConnectionError,
+                ) as err:
+                    last_error = MooxConnectionException(f"Connection error: {err}")
+                    if auth_attempt < AUTH_INTERNAL_RETRIES - 1:
+                        await asyncio.sleep(min(2**auth_attempt, 5))
+                        continue
+                    raise MooxConnectionException(
+                        f"Connection error after {AUTH_INTERNAL_RETRIES} attempts"
+                    ) from err
+                except aiohttp.ClientError as err:
+                    raise MooxException(f"Client error: {err}") from err
 
-                    text = await response.text()
-                    raise MooxException(
-                        f"Authentication failed: {response.status}: {text}"
-                    )
-
-            except asyncio.TimeoutError as err:
-                raise MooxConnectionException(
-                    f"Authentication timeout: {err}"
-                ) from err
-            except (
-                aiohttp.ClientConnectorError,
-                aiohttp.ServerConnectionError,
-            ) as err:
-                raise MooxConnectionException(f"Connection error: {err}") from err
-            except aiohttp.ClientError as err:
-                raise MooxException(f"Client error: {err}") from err
+            if last_error:
+                raise last_error
+            raise MooxException("Authentication failed")
 
     async def _request(
         self,
@@ -244,9 +310,19 @@ class MooxClient:
         url = f"{self._base_url}/{endpoint}"
         last_exception: Exception | None = None
 
+        request_had_valid_session = self._authenticated or self._ever_authenticated
+
+        is_reauth_attempt = False
+        needs_reauth = False
         for attempt in range(retries):
             try:
-                await self._authenticate()
+                await self._authenticate(
+                    skip_rate_limit=is_reauth_attempt or needs_reauth,
+                    is_reauth=is_reauth_attempt or needs_reauth,
+                )
+                is_reauth_attempt = False
+                needs_reauth = False
+
                 async with self._session.request(
                     method,
                     url,
@@ -255,12 +331,11 @@ class MooxClient:
                     timeout=self._timeout,
                 ) as response:
                     if 200 <= response.status < 300:
+                        self._session_expiration_in_progress = False
                         try:
                             return await response.json()
                         except (ValueError, aiohttp.ContentTypeError) as err:
-                            raise MooxException(
-                                f"Invalid JSON response: {err}"
-                            ) from err
+                            raise MooxException(f"Invalid JSON response: {err}") from err
 
                     text = await response.text()
 
@@ -270,10 +345,25 @@ class MooxClient:
                             if isinstance(error_data, dict) and str(
                                 error_data.get("error", "")
                             ) == "ERROR_004":
-                                was_authenticated = self._authenticated
-                                self._authenticated = False
-                                if was_authenticated:
-                                    raise MooxSessionExpiredException("Session expired")
+                                session_was_valid = (
+                                    request_had_valid_session
+                                    or self._authenticated
+                                    or self._ever_authenticated
+                                    or self._session_expiration_in_progress
+                                )
+
+                                if session_was_valid:
+                                    self._clear_auth_state_for_reauth()
+                                    needs_reauth = True
+                                    if attempt < retries - 1:
+                                        is_reauth_attempt = True
+                                        await asyncio.sleep(min(2**attempt, 10))
+                                        continue
+                                    raise MooxSessionExpiredException(
+                                        "Session expired after max retries"
+                                    )
+
+                                self._reset_for_credential_failure()
                                 raise MooxAuthenticationException(
                                     error_data.get("message", "Invalid credentials")
                                 )
@@ -296,6 +386,12 @@ class MooxClient:
 
             except MooxSessionExpiredException:
                 self._authenticated = False
+                needs_reauth = True
+                if attempt < retries - 1:
+                    is_reauth_attempt = True
+                    last_exception = MooxSessionExpiredException("Session expired")
+                    await asyncio.sleep(min(2**attempt, 10))
+                    continue
                 raise
             except MooxAuthenticationException:
                 raise
@@ -335,7 +431,7 @@ class MooxClient:
 
         if last_exception:
             raise last_exception
-        raise MooxException("Request failed without specific error")
+        raise MooxException("Request failed")
 
     async def get_devices(self) -> list[DeviceModel]:
         """Get all devices from the MOOX server."""

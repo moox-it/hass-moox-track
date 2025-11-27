@@ -8,5 +8,5 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/moox-it/hass-moox-track/issues",
   "requirements": [],
-  "version": "2.0.1"
+  "version": "2.0.2"
 }
