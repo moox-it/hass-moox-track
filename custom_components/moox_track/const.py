@@ -39,6 +39,14 @@ CONF_UPDATE_INTERVAL = "update_interval"
 CONF_EMAIL = "email"
 CONF_USERNAME_DEPRECATED = "username"
 
+# Grace period before escalating errors to user
+# For credentials that previously worked: wait longer (server might be temporarily down)
+AUTH_FAILURE_GRACE_PERIOD_HOURS = 12
+
+# For credentials that NEVER worked: shorter grace period then prompt reauth
+# This handles the case where we can't tell if it's wrong password or server down
+AUTH_NEVER_WORKED_GRACE_PERIOD_HOURS = 1
+
 EVENTS = {
     "deviceMoving": "device_moving",
     "commandResult": "command_result",

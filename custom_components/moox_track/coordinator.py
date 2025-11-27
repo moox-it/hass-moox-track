@@ -17,7 +17,7 @@ limitations under the License.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 try:
@@ -28,10 +28,13 @@ except ImportError:
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    AUTH_FAILURE_GRACE_PERIOD_HOURS,
+    AUTH_NEVER_WORKED_GRACE_PERIOD_HOURS,
     CONF_CUSTOM_ATTRIBUTES,
     CONF_EVENTS,
     CONF_MAX_ACCURACY,
@@ -66,6 +69,9 @@ class MooxServerCoordinatorDataDevice(TypedDict):
 
 MooxServerCoordinatorData: TypeAlias = dict[int, MooxServerCoordinatorDataDevice]
 
+AUTH_FAILURE_STORAGE_VERSION = 1
+AUTH_FAILURE_STORAGE_KEY = "auth_failure_state"
+
 
 class MooxServerCoordinator(DataUpdateCoordinator[MooxServerCoordinatorData]):
     """Coordinator to manage fetching MOOX Track data."""
@@ -82,9 +88,7 @@ class MooxServerCoordinator(DataUpdateCoordinator[MooxServerCoordinatorData]):
         update_interval_seconds = config_entry.options.get(CONF_UPDATE_INTERVAL, 30)
         if update_interval_seconds < 30:
             update_interval_seconds = 30
-            LOGGER.warning(
-                "Update interval below minimum, using 30 seconds"
-            )
+            LOGGER.warning("Update interval below minimum, using 30 seconds")
         update_interval = (
             timedelta(seconds=update_interval_seconds)
             if update_interval_seconds > 0
@@ -106,6 +110,108 @@ class MooxServerCoordinator(DataUpdateCoordinator[MooxServerCoordinatorData]):
         )
         self._geofences: list[GeofenceModel] = []
         self._last_event_import: datetime | None = None
+        self._first_auth_failure_time: datetime | None = None
+        self._auth_failure_store: Store[dict[str, Any]] = Store(
+            hass,
+            AUTH_FAILURE_STORAGE_VERSION,
+            f"{DOMAIN}.{config_entry.entry_id}.{AUTH_FAILURE_STORAGE_KEY}",
+        )
+        self._storage_loaded = False
+        self._storage_loading = False
+        self._first_successful_update = False
+
+    async def _load_auth_failure_state(self) -> None:
+        """Load persisted auth failure state from storage."""
+        if self._storage_loaded:
+            return
+        if self._storage_loading:
+            while self._storage_loading and not self._storage_loaded:
+                await asyncio.sleep(0.01)
+            return
+        self._storage_loading = True
+        try:
+            data = await self._auth_failure_store.async_load()
+            if data and isinstance(data, dict):
+                timestamp_str = data.get("first_auth_failure_time")
+                if timestamp_str:
+                    loaded_dt = datetime.fromisoformat(timestamp_str)
+                    if loaded_dt.tzinfo is None:
+                        loaded_dt = loaded_dt.replace(tzinfo=timezone.utc)
+                    self._first_auth_failure_time = loaded_dt
+            self._storage_loaded = True
+        except Exception:
+            self._first_auth_failure_time = None
+            self._storage_loaded = True
+        finally:
+            self._storage_loading = False
+
+    async def _save_auth_failure_state(self) -> None:
+        """Persist auth failure state to storage."""
+        try:
+            if self._first_auth_failure_time is None:
+                await self._auth_failure_store.async_remove()
+            else:
+                await self._auth_failure_store.async_save({
+                    "first_auth_failure_time": self._first_auth_failure_time.isoformat(),
+                })
+        except Exception:
+            pass
+
+    async def _handle_server_failure(
+        self, exception: MooxException, is_auth_failure: bool = False
+    ) -> bool:
+        """Handle server failure with grace period.
+
+        Returns True if should escalate to user, False to continue with cached data.
+        """
+        ever_authenticated = self.client.ever_authenticated
+
+        if is_auth_failure and not ever_authenticated:
+            LOGGER.warning("Unable to sign in. Please verify your credentials.")
+            return True
+
+        await self._load_auth_failure_state()
+        now = dt_util.utcnow()
+
+        if ever_authenticated:
+            grace_period_hours = AUTH_FAILURE_GRACE_PERIOD_HOURS
+        else:
+            grace_period_hours = AUTH_NEVER_WORKED_GRACE_PERIOD_HOURS
+
+        if self._first_auth_failure_time is None:
+            self._first_auth_failure_time = now
+            await self._save_auth_failure_state()
+            LOGGER.info("Connection issue. Retrying automatically. You'll be notified if action is needed.")
+            return False
+
+        hours_since_first_failure = (
+            now - self._first_auth_failure_time
+        ).total_seconds() / 3600
+
+        if hours_since_first_failure < grace_period_hours:
+            return False
+
+        old_time = self._first_auth_failure_time
+        try:
+            self._first_auth_failure_time = None
+            await self._save_auth_failure_state()
+        except Exception:
+            self._first_auth_failure_time = old_time
+
+        LOGGER.warning("Unable to reconnect. Please sign in again to continue.")
+        return True
+
+    async def _clear_failure_tracking(self) -> None:
+        """Clear failure tracking after successful update."""
+        await self._load_auth_failure_state()
+
+        if self._first_auth_failure_time is not None:
+            LOGGER.info("Connection restored. Everything is working normally.")
+            self._first_auth_failure_time = None
+            await self._save_auth_failure_state()
+        elif not self._first_successful_update:
+            LOGGER.info("Connected to MOOX Track. Real-time device tracking is now active.")
+            self._first_successful_update = True
 
     async def _async_update_data(self) -> MooxServerCoordinatorData:
         """Fetch data from MOOX Track."""
@@ -119,74 +225,106 @@ class MooxServerCoordinator(DataUpdateCoordinator[MooxServerCoordinatorData]):
             )
 
             devices_result, positions_result, geofences_result = results
-            session_expired = False
-            connection_error = False
 
-            if isinstance(devices_result, MooxAuthenticationException):
-                raise ConfigEntryAuthFailed from devices_result
-            if isinstance(devices_result, MooxSessionExpiredException):
-                session_expired = True
-                devices = []
-            elif isinstance(devices_result, MooxConnectionException):
-                connection_error = True
-                devices = []
-            elif isinstance(devices_result, Exception):
-                raise UpdateFailed(
-                    f"Error fetching devices: {devices_result}"
-                ) from devices_result
-            else:
-                devices = devices_result if isinstance(devices_result, list) else []
+            auth_failure: MooxAuthenticationException | None = None
+            session_failure: MooxSessionExpiredException | None = None
+            connection_failure: MooxConnectionException | None = None
+            other_failure: MooxException | None = None
 
-            if isinstance(positions_result, MooxAuthenticationException):
-                raise ConfigEntryAuthFailed from positions_result
-            if isinstance(positions_result, MooxSessionExpiredException):
-                session_expired = True
-                positions = []
-            elif isinstance(positions_result, MooxConnectionException):
-                connection_error = True
-                positions = []
-            elif isinstance(positions_result, Exception):
-                raise UpdateFailed(
-                    f"Error fetching positions: {positions_result}"
-                ) from positions_result
-            else:
-                positions = (
-                    positions_result if isinstance(positions_result, list) else []
-                )
+            for result in (devices_result, positions_result, geofences_result):
+                if isinstance(result, MooxAuthenticationException):
+                    auth_failure = auth_failure or result
+                elif isinstance(result, MooxSessionExpiredException):
+                    session_failure = session_failure or result
+                elif isinstance(result, MooxConnectionException):
+                    connection_failure = connection_failure or result
+                elif isinstance(result, MooxException):
+                    other_failure = other_failure or result
 
-            if isinstance(geofences_result, MooxAuthenticationException):
-                raise ConfigEntryAuthFailed from geofences_result
-            if isinstance(geofences_result, MooxSessionExpiredException):
-                session_expired = True
+            if auth_failure is not None:
+                if await self._handle_server_failure(auth_failure, is_auth_failure=True):
+                    raise ConfigEntryAuthFailed from auth_failure
+                if self.data:
+                    return self.data
+                return {}
+
+            if session_failure is not None:
+                if await self._handle_server_failure(session_failure, is_auth_failure=True):
+                    raise ConfigEntryAuthFailed from session_failure
+                if self.data:
+                    return self.data
+                return {}
+
+            if connection_failure is not None:
+                if await self._handle_server_failure(connection_failure, is_auth_failure=False):
+                    if not self.client.ever_authenticated:
+                        raise ConfigEntryAuthFailed from connection_failure
+                    raise UpdateFailed(
+                        f"Server connection errors for over "
+                        f"{AUTH_FAILURE_GRACE_PERIOD_HOURS} hours"
+                    ) from connection_failure
+                if self.data:
+                    return self.data
+                return {}
+
+            if other_failure is not None:
+                if await self._handle_server_failure(other_failure, is_auth_failure=False):
+                    if not self.client.ever_authenticated:
+                        raise ConfigEntryAuthFailed from other_failure
+                    raise UpdateFailed(
+                        f"Server errors for over {AUTH_FAILURE_GRACE_PERIOD_HOURS} hours"
+                    ) from other_failure
+                if self.data:
+                    return self.data
+                return {}
+
+            if isinstance(devices_result, Exception):
+                raise UpdateFailed(f"Error fetching devices: {devices_result}") from devices_result
+            devices = devices_result if isinstance(devices_result, list) else []
+
+            if isinstance(positions_result, Exception):
+                raise UpdateFailed(f"Error fetching positions: {positions_result}") from positions_result
+            positions = positions_result if isinstance(positions_result, list) else []
+
+            if isinstance(geofences_result, Exception):
                 geofences = []
-            elif isinstance(geofences_result, MooxConnectionException):
-                connection_error = True
-                geofences = []
-            elif isinstance(geofences_result, Exception):
-                LOGGER.debug("Error fetching geofences: %s", geofences_result)
-                geofences = []
             else:
-                geofences = (
-                    geofences_result if isinstance(geofences_result, list) else []
-                )
+                geofences = geofences_result if isinstance(geofences_result, list) else []
 
-        except MooxSessionExpiredException:
+        except MooxAuthenticationException as ex:
+            if await self._handle_server_failure(ex, is_auth_failure=True):
+                raise ConfigEntryAuthFailed from ex
             if self.data:
                 return self.data
             return {}
-        except MooxConnectionException:
+        except MooxSessionExpiredException as ex:
+            if await self._handle_server_failure(ex, is_auth_failure=True):
+                raise ConfigEntryAuthFailed from ex
             if self.data:
                 return self.data
             return {}
-        except MooxAuthenticationException:
-            raise ConfigEntryAuthFailed from None
+        except MooxConnectionException as ex:
+            if await self._handle_server_failure(ex, is_auth_failure=False):
+                if not self.client.ever_authenticated:
+                    raise ConfigEntryAuthFailed from ex
+                raise UpdateFailed(
+                    f"Server connection errors for over {AUTH_FAILURE_GRACE_PERIOD_HOURS} hours"
+                ) from ex
+            if self.data:
+                return self.data
+            return {}
         except MooxException as ex:
-            raise UpdateFailed(f"Error updating data: {ex}") from ex
-
-        if session_expired or connection_error:
+            if await self._handle_server_failure(ex, is_auth_failure=False):
+                if not self.client.ever_authenticated:
+                    raise ConfigEntryAuthFailed from ex
+                raise UpdateFailed(
+                    f"Server errors for over {AUTH_FAILURE_GRACE_PERIOD_HOURS} hours"
+                ) from ex
             if self.data:
                 return self.data
             return {}
+
+        await self._clear_failure_tracking()
 
         if TYPE_CHECKING:
             assert isinstance(devices, list[DeviceModel])  # type: ignore[misc]
@@ -218,10 +356,7 @@ class MooxServerCoordinator(DataUpdateCoordinator[MooxServerCoordinatorData]):
         for device in devices:
             device_id = device.get("id")
             if device_id is None:
-                LOGGER.warning(
-                    "Device missing id field: %s",
-                    device.get("name", "unknown"),
-                )
+                LOGGER.warning("Device missing id: %s", device.get("name", "unknown"))
                 continue
             if device_id not in data:
                 data[device_id] = {
